@@ -44,7 +44,12 @@ function boot() {
   if (!bootPromise) {
     bootPromise = Promise.all([
       fetch(new URL('data/parts.json', BASE)).then((r) => r.json()),
-      fetch(new URL('data/meshes.bin', BASE)).then((r) => r.arrayBuffer()),
+      fetch(new URL('data/meshes.bin', BASE)).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
+        .catch(() => fetch(new URL('data/meshes.json', BASE)).then((r) => r.json()).then((j) => {   // base64 pack where .bin is not served
+          const bin = atob(j.b64), out = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+          return out.buffer;
+        })),
     ]).then(([d, b]) => { DATA = d; BUF = b; buildEngine(); buildModel(); computeMass(); initSequence(); initAdvanced(); initFlight(); })
       .catch((e) => { for (const id of ['seq-loading', 'adv-loading']) { const el = $(id); if (el) el.textContent = 'CAD DATA FAILED TO LOAD: ' + e.message; } throw e; });
   }
@@ -1011,6 +1016,6 @@ function polarChart(mu) {
 
 // open the remembered tab, or a deep link (#sequence / #advanced / #flight)
 const deep = location.hash.replace('#', '');
-const startTab = MY_TABS[deep] ? deep : null;
+const startTab = MY_TABS[deep] ? deep : MY_TABS[document.body.dataset.startTab] ? document.body.dataset.startTab : null;
 if (startTab) document.querySelector(`[data-tab="${startTab}"]`)?.click();
 window.__jd = { _dbg: { OBJS, PARTS, NODE }, seek: (t) => { seq.playing = false; seq.snap = true; syncPlay(); setSeqTime(t); }, style: (s) => document.querySelector(`[data-seqstyle="${s}"]`).click(), showTab, get DATA() { return DATA; }, MASS, flightModel: () => flightModel(FLIGHT) };
