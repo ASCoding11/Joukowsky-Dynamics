@@ -10,7 +10,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const REPO = 'https://github.com/ASCoding11/Joukowsky-Dynamics/blob/main/';
-const BASE = new URL('./', import.meta.url);
+const BASE = (() => { try { return new URL('./', import.meta.url); } catch (e) { return new URL('./', location.href); } })();   // blob: when decrypted in place
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (t) => t * t * (3 - 2 * t);
@@ -42,7 +42,8 @@ function showTab(tab) {
 let DATA, BUF, bootPromise;
 function boot() {
   if (!bootPromise) {
-    bootPromise = Promise.all([
+    const pre = window.__JD_DATA;                     // decrypted in place by the password page on the personal site
+    bootPromise = (pre ? Promise.resolve([pre.parts, pre.meshes]) : Promise.all([
       fetch(new URL('data/parts.json', BASE)).then((r) => r.json()),
       fetch(new URL('data/meshes.bin', BASE)).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
         .catch(() => fetch(new URL('data/meshes.json', BASE)).then((r) => r.json()).then((j) => {   // base64 pack where .bin is not served
@@ -50,7 +51,7 @@ function boot() {
           for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
           return out.buffer;
         })),
-    ]).then(([d, b]) => { DATA = d; BUF = b; buildEngine(); buildModel(); computeMass(); initSequence(); initAdvanced(); initFlight(); })
+    ])).then(([d, b]) => { DATA = d; BUF = b; buildEngine(); buildModel(); computeMass(); initSequence(); initAdvanced(); initFlight(); })
       .catch((e) => { for (const id of ['seq-loading', 'adv-loading']) { const el = $(id); if (el) el.textContent = 'CAD DATA FAILED TO LOAD: ' + e.message; } throw e; });
   }
   return bootPromise;
