@@ -1,0 +1,57 @@
+{
+  "design": "A-A1-road",
+  "status": "Concept geometry only. No tolerances, fits, verified materials, loads or flight qualification. Curved freeform panels may be open / faceted CAD surfaces, not watertight production solids.",
+  "mmPerModelUnit_assumption": 1000.0,
+  "items": 4263,
+  "geometry_prototypes": 175,
+  "basis": {
+    "faceted CAD surface": 15,
+    "spline-fit tube sweep": 41,
+    "analytic box": 53,
+    "B-spline-fitted open CAD panel": 5,
+    "faceted CAD solid": 27,
+    "analytic cylinder": 17,
+    "analytic torus": 12,
+    "revolved CAD surface": 1,
+    "profile extrusion / sampled outline": 3,
+    "analytic sphere": 1
+  },
+  "fallbacks": [
+    {
+      "geometry": "g0",
+      "type": "BufferGeometry",
+      "reason": "Spline fit exceeded source geometry envelope; retained source faces"
+    },
+    {
+      "geometry": "g1",
+      "type": "BufferGeometry",
+      "reason": "Spline fit exceeded source geometry envelope; retained source faces"
+    },
+    {
+      "geometry": "g11",
+      "type": "BufferGeometry",
+      "reason": "Spline fit exceeded source geometry envelope; retained source faces"
+    },
+    {
+      "geometry": "g31",
+      "type": "TubeGeometry",
+      "reason": "BRepOffsetAPI_MakePipeShell::MakeSolid"
+    },
+    {
+      "geometry": "g34",
+      "type": "TubeGeometry",
+      "reason": "BRepOffsetAPI_MakePipeShell::MakeSolid"
+    },
+    {
+      "geometry": "g71",
+      "type": "TubeGeometry",
+      "reason": "Sweep validation failed"
+    }
+  ],
+  "empty_features": [],
+  "open_surface_items": 28,
+  "solid_items": 4235,
+  "invalid_prototypes": [],
+  "step_bytes": 76274185,
+  "assembly_groups": 30
+}

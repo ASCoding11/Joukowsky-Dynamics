@@ -1,0 +1,12 @@
+{
+  "valid": true,
+  "solid_count": 4235,
+  "shell_count": 4263,
+  "face_count": 70287,
+  "bounds_mm": [
+    6316.672289499955,
+    1693.5091297162219,
+    2706.8
+  ],
+  "volume_mm3_unfused_overlap_allowed": 155954420.40563428
+}
