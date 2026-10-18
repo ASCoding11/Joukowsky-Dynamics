@@ -3,7 +3,13 @@
 A road car whose four wheels swing up and become ducted proprotors. This repository holds the
 interactive concept workbench and the CAD behind it.
 
-Open `index.html` through any static server (for example `npx http-server .`) and use the tabs:
+The GitHub Pages site (https://ascoding11.github.io/Joukowsky-Dynamics/) opens on a password screen. The workbench is stored
+encrypted in `vault.bin` (AES-256-GCM, key derived from the password with PBKDF2) and loads in place once the right password
+is entered; a correct entry is remembered for that browser tab only. The unencrypted page is `web/workbench.html.tpl`, kept
+out of the served pages on purpose. After changing the workbench, or to change the password, rebuild the vault:
+`JD_PASSWORD=<password> python tools/build_vault.py vault.bin`.
+
+To work on it locally, serve the repo (for example `python3 -m http.server`), open it and unlock it, then use the tabs:
 
 | Tab | What it is |
 | --- | --- |
