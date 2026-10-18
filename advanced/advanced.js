@@ -9,7 +9,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-const REPO = 'https://github.com/ASCoding11/Joukowsky-Dynamics/blob/claude/rev08-advanced-blueprint/';
+const REPO = 'https://github.com/ASCoding11/Joukowsky-Dynamics/blob/main/';
 const BASE = new URL('./', import.meta.url);
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
