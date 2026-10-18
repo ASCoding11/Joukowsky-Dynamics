@@ -106,6 +106,7 @@ function makeView(name, containerId, camPos, target) {
 }
 let current = null;
 function activate(tab) {
+  if (FOCUS.region && FOCUS.view !== tab) exitFocus(true);
   const v = views[tab === 'flight' ? null : tab];
   if (tab === 'flight') { current = null; renderFlight(); return; }
   if (!v) return;
@@ -130,6 +131,7 @@ function loop() {
   if (!current || document.hidden) return;
   const v = views[current];
   if (current === 'sequence') tickSequence(dt);
+  tickFocus(dt, current);
   v.controls.update();
   const t = performance.now() / 1000;
   for (const m of holoMats) m.uniforms.uTime.value = t;
@@ -137,6 +139,7 @@ function loop() {
   if (current === 'sequence' && seq.style === 'holo' && seq.bloom) composer.render();
   else renderer.render(scene, v.camera);
   if (current === 'sequence') drawCallouts();
+  drawRegionLabels(current);
 }
 
 // ------------------------------------------------------------------ materials
@@ -211,13 +214,17 @@ function holoLine(color, opacity) {
 let H; // holo material sets
 function makeHoloSets() {
   H = {
-    holo: { mesh: holoMat(0x2fb8cc, .10), line: holoLine(0x6be1ed, .42), meshHot: holoMat(0xffb35c, .16), lineHot: holoLine(0xffc27a, .7), shell: holoMat(0x4fd2e4, .07, 3.2) },
-    xray: { mesh: holoMat(0x8fb8ff, .05, 1.2), line: holoLine(0xcfe4ff, .22), meshHot: holoMat(0xff9d6b, .12), lineHot: holoLine(0xffd0a8, .6), shell: holoMat(0xa9c8ff, .04, 2.6) },
+    holo: { mesh: holoMat(0x2fb8cc, .10), line: holoLine(0x6be1ed, .42), meshHot: holoMat(0xffb35c, .16), lineHot: holoLine(0xffc27a, .7), shell: holoMat(0x4fd2e4, .07, 3.2),
+      ghost: holoMat(0x2fb8cc, .015, .6), ghostLine: holoLine(0x2f8fa0, .05) },
+    xray: { mesh: holoMat(0x8fb8ff, .05, 1.2), line: holoLine(0xcfe4ff, .22), meshHot: holoMat(0xff9d6b, .12), lineHot: holoLine(0xffd0a8, .6), shell: holoMat(0xa9c8ff, .04, 2.6),
+      ghost: holoMat(0x8fb8ff, .012, .5), ghostLine: holoLine(0x7f9fd0, .04) },
   };
 }
 const highlightMat = new THREE.MeshBasicMaterial({ color: 0xffb35c, transparent: true, opacity: .55, depthTest: false });
 const highlightLine = new THREE.LineBasicMaterial({ color: 0xffe2b8, depthTest: false });
 const ghostMat = new THREE.MeshBasicMaterial({ color: 0x6be1ed, transparent: true, opacity: .035, depthWrite: false });
+const ghostLine = new THREE.LineBasicMaterial({ color: 0x6be1ed, transparent: true, opacity: .05, depthWrite: false });
+const cadHotLine = new THREE.LineBasicMaterial({ color: 0xffb35c, transparent: true, opacity: .9 });
 
 // ------------------------------------------------------------------ model
 let root;
@@ -293,6 +300,7 @@ function buildModel() {
     list.forEach((gi, k) => (INST_TO_OBJ[gi] = [rec, k]));
     OBJS.push(rec);
   }
+  assignRegions();
   // rotor-disc glow per module (shown when a rotor spins in flight)
   for (const c of ['FL', 'FR', 'RL', 'RR']) {
     const md = NODE_BY_ID['mod_' + c];
@@ -306,11 +314,14 @@ let hotSystems = new Set();
 function applyStyle(style) {
   styleNow = style;
   const set = H[style];
+  const fr = FOCUS.region, hv = FOCUS.hover;
   for (const r of OBJS) {
-    const hot = hotSystems.has(r.sys);
+    const inFocus = fr && r.region === fr, ghost = fr && !inFocus;
+    const hot = fr ? inFocus : hv ? r.region === hv : hotSystems.has(r.sys);
     const shell = r.sys === '101' || r.sys === '102';
-    const mesh = style === 'cad' ? cadMat(PARTS[r.pi].def.material) : hot ? set.meshHot : shell ? set.shell : set.mesh;
-    const line = style === 'cad' ? cadLine : hot ? set.lineHot : set.line;
+    let mesh = style === 'cad' ? cadMat(PARTS[r.pi].def.material) : hot ? set.meshHot : shell ? set.shell : set.mesh;
+    let line = style === 'cad' ? (hot && hv && !fr ? cadHotLine : cadLine) : hot ? set.lineHot : set.line;
+    if (ghost) { mesh = style === 'cad' ? ghostMat : set.ghost; line = style === 'cad' ? ghostLine : set.ghostLine; }
     if (r.obj.isInstancedMesh) r.obj.material = mesh; else r.obj.children.forEach((c) => (c.material = c.isMesh ? mesh : line));
     if (r.line) r.line.material = line;
   }
@@ -486,6 +497,7 @@ function initSequence() {
   }));
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   seq.playing = !reduce; syncPlay();
+  initRegionUI('sequence');
 }
 function syncPlay() { $('seq-play').textContent = seq.playing && seq.dir > 0 ? '❚❚ Pause' : '▶ Play'; $('seq-land').textContent = seq.playing && seq.dir < 0 ? '❚❚ Pause' : '◀ Land & stow'; }
 function tickSequence(dt) {
@@ -495,7 +507,7 @@ function tickSequence(dt) {
     if (t >= T_END) { t = T_END; seq.playing = false; syncPlay(); }
     setSeqTime(t);
   }
-  if (seq.autoCam) {
+  if (seq.autoCam && !FOCUS.region) {
     const s = STEPS[Math.max(0, seq.step)], v = views.sequence;
     const lift = seqState(seq.t).lift;
     const tp = _v.set(...s.cam[1]); if (seq.step >= 7) tp.y = Math.max(tp.y, lift + .4);
@@ -550,6 +562,7 @@ function buildCallouts(list) {
 function drawCallouts() {
   const v = views.sequence, w = v.el.clientWidth, h = v.el.clientHeight;
   let svg = '';
+  if (FOCUS.region) { calloutEls.forEach((c) => (c.el.style.opacity = 0)); $('seq-leaders').innerHTML = ''; return; }
   for (const c of calloutEls) {
     const p = c.pt.clone().applyMatrix4(c.node.matrixWorld).project(v.camera);
     const vis = p.z < 1 && Math.abs(p.x) < 1.1 && Math.abs(p.y) < 1.1;
@@ -592,6 +605,7 @@ function initAdvanced() {
     adv.isolate = false; refreshIsolation(); applyAdvState(); v.camera.position.set(7.5, 3.6, 7.5); v.controls.target.set(0, .5, 0);
   });
   document.querySelectorAll('[data-advview]').forEach((b) => b.addEventListener('click', () => setAdvView(b.dataset.advview)));
+  initRegionUI('advanced');
   // picking
   const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2(); let down = null;
   v.el.addEventListener('pointerdown', (e) => (down = [e.clientX, e.clientY]));
@@ -664,6 +678,7 @@ function frameOverlays() {
   v.controls.target.copy(c); v.camera.position.copy(c).addScaledVector(dir, r / Math.tan(rad(18)) * 1.15);
 }
 function refreshIsolation() {
+  if (FOCUS.region) { applyStyle(styleNow); return; }
   const iso = adv.isolate && adv.sel >= 0;
   for (const rec of OBJS) {
     const sys = PARTS[rec.pi].def.system;
@@ -700,11 +715,13 @@ function renderSheet(pi) {
     <div class="sheet-actions">
       <button id="sheet-frame">Frame in view</button>
       <button id="sheet-iso">${adv.isolate ? 'Show full vehicle' : 'Isolate part'}</button>
+      <button id="sheet-region">Expand its region</button>
       <a href="${REPO}cad/rev08/step/${p.step}" target="_blank" rel="noopener">STEP${p.step_lh ? ' (RH)' : ''} ↗</a>
       ${p.step_lh ? `<a href="${REPO}cad/rev08/step/${p.step_lh}" target="_blank" rel="noopener">STEP (LH) ↗</a>` : ''}
     </div>
     <p class="sheet-note">Mass is computed from the B-rep volume (or laminate area × ply thickness for skins) and the material density. Concept geometry only: no tolerances, fits or qualified loads.</p>`;
   $('sheet-frame').onclick = () => { setAdvView('3d'); frameOverlays(); };
+  $('sheet-region').onclick = () => { const rec = OBJS.find((r) => r.pi === pi); if (rec) { setAdvView('3d'); focusRegion('advanced', rec.region, rec); } };
   $('sheet-iso').onclick = () => { adv.isolate = !adv.isolate; refreshIsolation(); renderSheet(pi); if (adv.isolate) frameOverlays(); };
 }
 function drawing(pi) {
@@ -1014,8 +1031,353 @@ function polarChart(mu) {
   return `<article class="chart-card"><span class="ref">Fig. 3 · Eq. 7</span><h4>Edgewise flow at cruise, μ = ${fmt(mu, 3)}</h4>${s}<p>Velocity normal to the leading edge over tip speed, r/R + μ cos ψ: dark near zero, bright at the advancing tip, red where the flow reverses on the retreating side.</p></article>`;
 }
 
+// ------------------------------------------------------------------ REGION EXPLORER (click a region: it flies in and explodes)
+const REGIONS = [
+  { id: 'FL', name: 'Fan-wheel FL', long: 'Fan-wheel / proprotor corner, front port', kind: 'fan' },
+  { id: 'FR', name: 'Fan-wheel FR', long: 'Fan-wheel / proprotor corner, front starboard', kind: 'fan' },
+  { id: 'RL', name: 'Fan-wheel RL', long: 'Fan-wheel / proprotor corner, rear port', kind: 'fan' },
+  { id: 'RR', name: 'Fan-wheel RR', long: 'Fan-wheel / proprotor corner, rear starboard', kind: 'fan' },
+  { id: 'battery', name: 'Battery', long: 'Battery pack · 19 modules', kind: 'grid' },
+  { id: 'power', name: 'Power electronics', long: 'HV distribution & inverters', kind: 'radial' },
+  { id: 'cockpit', name: 'Cockpit', long: 'Cockpit, controls & restraints', kind: 'radial' },
+  { id: 'avionics', name: 'Avionics', long: 'Flight control, sensors & harness', kind: 'radial' },
+  { id: 'thermal', name: 'Thermal', long: 'Thermal management', kind: 'radial' },
+  { id: 'legs', name: 'Landing legs', long: 'Landing legs ×4', kind: 'radial' },
+  { id: 'emergency', name: 'Parachute', long: 'Ballistic parachute & fire suppression', kind: 'radial' },
+  { id: 'structure', name: 'Structure', long: 'Carbon tub, subframes & road chassis', kind: 'radial' },
+  { id: 'body', name: 'Body', long: 'Body panels, doors, glazing & lighting', kind: 'shell' },
+];
+const REGION_BY_ID = Object.fromEntries(REGIONS.map((r) => [r.id, r]));
+const FOCUS = { region: null, view: null, hover: null, f: 0, target: 0, fly: null, labels: [], rec: null, briefT: 0 };
+function topNode(nid) {
+  let n = NODE[nid];
+  while (n.def.parent >= 0) {
+    const p = NODE[n.def.parent];
+    if (p.def.id === 'vehicle' || p.def.id === 'chassis') return n.def.id === 'chassis_R' ? 'chassis' : n.def.id;
+    n = p;
+  }
+  return n.def.id;
+}
+function assignRegions() {
+  for (const r of OBJS) {
+    const top = topNode(r.ni), sys = r.sys;
+    let id = 'structure';
+    if (/^corner_/.test(top)) id = top.slice(7);
+    else if (/^leg_/.test(top)) id = 'legs';
+    else if (top === 'body' || /^door_/.test(top)) id = 'body';
+    else if (top === 'power' || /^bmod_/.test(top)) id = sys === '210' ? 'power' : 'battery';
+    else if (top === 'cockpit') id = 'cockpit';
+    else if (top === 'avionics') id = 'avionics';
+    else if (top === 'thermal') id = 'thermal';
+    else if (top === 'emergency' || top === 'emergency_R') id = 'emergency';
+    r.region = id;
+  }
+}
+// axial slot (metres along the module axle, + outboard / up in flight) for the fan-wheel exploded view
+function fanSlot(rec) {
+  const p = PARTS[rec.pi].def, nid = NODE[rec.ni].def.id, a = p.assy;
+  if (/^petO_/.test(nid)) return 1.15;
+  if (/^petI_/.test(nid)) return -1.25;
+  if (a === 'Road tyre') return 0.78;
+  if (a === 'Duct & rim') return 0.42;
+  if (p.system.startsWith('330')) return /^blade_/.test(nid) ? 0.12 : 0.0;
+  if (a === 'Stator') return -0.28;
+  if (a === 'Clutch') return -0.46;
+  if (p.system.startsWith('320') && a === 'Motor') return -0.64;
+  if (a === 'Brakes' || p.system.startsWith('360')) return -0.84;
+  if (a === 'Locks') return -0.98;
+  if (a === 'Spindle') return -1.06;
+  return null;   // yoke, tilt gimbal, suspension, fender cap: pushed radially away instead
+}
+function recWorldCentroid(rec, out) {
+  const P = PARTS[rec.pi], ctr = new THREE.Vector3(), m = new THREE.Matrix4(), v = new THREE.Vector3();
+  if (P.def.com) ctr.set(...P.def.com); else P.geo.boundingBox.getCenter(ctr);
+  out.set(0, 0, 0);
+  rec.obj.updateWorldMatrix(true, false);
+  for (const mt of rec.mtx) out.add(v.copy(ctr).applyMatrix4(m.multiplyMatrices(rec.obj.matrixWorld, mt)));
+  return out.divideScalar(rec.mtx.length);
+}
+function recLocalCentroid(rec) {
+  const P = PARTS[rec.pi], ctr = new THREE.Vector3(), v = new THREE.Vector3(), out = new THREE.Vector3();
+  if (P.def.com) ctr.set(...P.def.com); else P.geo.boundingBox.getCenter(ctr);
+  for (const mt of rec.mtx) out.add(v.copy(ctr).applyMatrix4(mt));
+  return out.divideScalar(rec.mtx.length);
+}
+function focusRegion(view, id, pickedRec = null) {
+  if (!REGION_BY_ID[id]) return;
+  if (FOCUS.region) resetOffsets();
+  const R = REGION_BY_ID[id];
+  root.updateMatrixWorld(true);
+  const recs = OBJS.filter((r) => r.region === id);
+  const C = new THREE.Vector3(); let mt = 0;
+  const cw = new Map();
+  for (const r of recs) { const c = recWorldCentroid(r, new THREE.Vector3()); cw.set(r, c); const m = PARTS[r.pi].def.mass_kg * r.mtx.length + 1e-3; C.addScaledVector(c, m); mt += m; }
+  C.divideScalar(mt);
+  let axis = null, modC = null;
+  if (R.kind === 'fan') {
+    const md = NODE_BY_ID['mod_' + id].group; modC = md.getWorldPosition(new THREE.Vector3());
+    axis = new THREE.Vector3(0, 0, 1).transformDirection(md.matrixWorld);
+    C.copy(modC);
+  }
+  const box = new THREE.Box3();
+  for (const r of recs) {
+    const c = cw.get(r), off = new THREE.Vector3();
+    if (R.kind === 'fan') {
+      const s = fanSlot(r);
+      if (s !== null) off.copy(axis).multiplyScalar(s * 1.05);
+      else { off.copy(c).sub(modC); off.addScaledVector(axis, -off.dot(axis)); off.setLength(.55).addScaledVector(axis, -.7); }
+    } else if (R.kind === 'grid') {
+      off.copy(c).sub(C); off.y = 0; off.multiplyScalar(.85); off.y = .35 + (PARTS[r.pi].def.pn === 'JD-200-002' ? .5 : PARTS[r.pi].def.pn === 'JD-200-001' ? -.45 : 0);
+    } else {
+      off.copy(c).sub(C);
+      const L = off.length();
+      off.multiplyScalar(R.kind === 'shell' ? .35 : .9); if (L > 1e-4) off.addScaledVector(off.clone().normalize(), R.kind === 'shell' ? .35 : .22);
+    }
+    const parent = r.obj.parent;
+    const p0 = parent.worldToLocal(c.clone()), p1 = parent.worldToLocal(c.clone().add(off));
+    r.focusOff = p1.sub(p0);
+    box.expandByPoint(c); box.expandByPoint(c.clone().add(off));
+  }
+  FOCUS.region = id; FOCUS.view = view; FOCUS.f = 0; FOCUS.target = 1; FOCUS.recs = recs; FOCUS.hover = null;
+  // camera: frame the exploded envelope from the current viewing direction
+  const v = views[view], ctr = box.getCenter(new THREE.Vector3()), radius = Math.max(.6, box.getSize(new THREE.Vector3()).length() * .5);
+  const dir = v.camera.position.clone().sub(v.controls.target).normalize();
+  if (R.kind === 'fan') {                       // look across the axle so the exploded stack spreads out on screen
+    const d = axis.clone().cross(new THREE.Vector3(0, 1, 0));
+    if (d.lengthSq() < .01) d.set(1, 0, 0);
+    d.normalize(); if (d.x < 0) d.negate();
+    dir.copy(d).add(new THREE.Vector3(0, .45, 0)).addScaledVector(axis, .35).normalize();
+  }
+  FOCUS.fly = { target: ctr, pos: ctr.clone().addScaledVector(dir, radius / Math.tan(rad2(18)) * (R.kind === 'fan' ? 1.25 : 1.0)) };
+  buildRegionLabels(recs);
+  applyStyle(styleNow);
+  if (view === 'sequence') { seq.autoCam = false; }
+  renderBrief(true);
+  const ui = REGION_UI[view]; ui.brief.hidden = false; ui.back.hidden = false; views[view].el.classList.add('focused');
+  ui.chips.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.region === id));
+}
+const rad2 = (d) => d * Math.PI / 180;
+function resetOffsets() { for (const r of OBJS) if (r.focusOff) { r.obj.position.set(0, 0, 0); if (r.line) r.line.position.set(0, 0, 0); r.focusOff = null; } }
+function exitFocus(immediate = false) {
+  if (!FOCUS.region) return;
+  if (immediate) { finishExit(); return; }
+  FOCUS.target = 0;
+}
+function finishExit() {
+  const view = FOCUS.view;
+  resetOffsets();
+  FOCUS.region = null; FOCUS.labels.forEach((l) => l.el.remove()); FOCUS.labels = []; FOCUS.f = 0;
+  views[view]?.el.classList.remove('focused');
+  const ui = REGION_UI[view]; if (ui) { ui.brief.hidden = true; ui.back.hidden = true; ui.svg.innerHTML = ''; ui.chips.querySelectorAll('button').forEach((b) => b.classList.remove('active')); }
+  if (view === 'sequence') seq.autoCam = true;
+  if (view === 'advanced') refreshIsolation(); else applyStyle(styleNow);
+}
+function tickFocus(dt, view) {
+  if (!FOCUS.region || FOCUS.view !== view) return;
+  const k = 1 - Math.pow(.02, dt);
+  FOCUS.f += (FOCUS.target - FOCUS.f) * k;
+  if (FOCUS.target === 0 && FOCUS.f < .01) { finishExit(); return; }
+  const e = smooth(clamp(FOCUS.f));
+  for (const r of FOCUS.recs) { r.obj.position.copy(r.focusOff).multiplyScalar(e); if (r.line) r.line.position.copy(r.obj.position); }
+  if (FOCUS.fly && FOCUS.target === 1) {
+    const v = views[view], kc = 1 - Math.pow(.08, dt);
+    v.controls.target.lerp(FOCUS.fly.target, kc); v.camera.position.lerp(FOCUS.fly.pos, kc);
+    if (v.camera.position.distanceTo(FOCUS.fly.pos) < .02) FOCUS.fly = null;
+  }
+  FOCUS.briefT += dt; if (FOCUS.briefT > .25) { FOCUS.briefT = 0; renderBrief(false); }
+}
+function buildRegionLabels(recs) {
+  FOCUS.labels.forEach((l) => l.el.remove()); FOCUS.labels = [];
+  const groups = new Map();
+  for (const r of recs) {
+    const p = PARTS[r.pi].def, nid = NODE[r.ni].def.id;
+    const key = /^petO_/.test(nid) ? 'Petals · inlet collector' : /^petI_/.test(nid) ? 'Petals · exit diffuser' : /^blade_/.test(nid) ? 'Proprotor blades' : p.assy;
+    const g = groups.get(key) || { key, mass: 0, n: 0, recs: [] };
+    g.mass += p.mass_kg * r.mtx.length; g.n += r.mtx.length; g.recs.push(r); groups.set(key, g);
+  }
+  const list = [...groups.values()].sort((a, b) => b.mass - a.mass).slice(0, 9);
+  const ui = REGION_UI[FOCUS.view];
+  for (const g of list) {
+    const rep = g.recs.reduce((a, b) => (PARTS[b.pi].def.mass_kg * b.mtx.length > PARTS[a.pi].def.mass_kg * a.mtx.length ? b : a));
+    const el = document.createElement('div'); el.className = 'callout-tag region-tag';
+    el.innerHTML = `${esc(g.key.toUpperCase())}<small>${g.n} part${g.n > 1 ? 's' : ''} · ${fmt(g.mass, g.mass < 10 ? 1 : 0)} kg</small>`;
+    ui.layer.appendChild(el);
+    FOCUS.labels.push({ el, obj: rep.obj, pt: recLocalCentroid(rep) });
+  }
+}
+function drawRegionLabels(view) {
+  const ui = REGION_UI[view];
+  if (!ui) return;
+  if (!FOCUS.region || FOCUS.view !== view) { if (ui.svg.innerHTML) ui.svg.innerHTML = ''; return; }
+  const v = views[view], w = v.el.clientWidth, h = v.el.clientHeight;
+  const cx = FOCUS.fly ? w / 2 : w / 2;
+  let svg = ''; const used = [];
+  const op = clamp((FOCUS.f - .55) / .35);
+  const pts = FOCUS.labels.map((l) => { const p = l.pt.clone().applyMatrix4(l.obj.matrixWorld).project(v.camera); return { l, x: (p.x + 1) / 2 * w, y: (1 - p.y) / 2 * h, vis: p.z < 1 }; });
+  pts.sort((a, b) => a.y - b.y);
+  for (const q of pts) {
+    if (!q.vis) { q.l.el.style.opacity = 0; continue; }
+    const right = q.x >= cx;
+    const maxX = w - (w > 900 ? 380 : 0) - 110;     // keep clear of the briefing panel
+    let lx = clamp(q.x + (right ? 150 : -150), 110, maxX), ly = clamp(q.y - 30, 70, h - 70);
+    for (const u of used) if (Math.abs(u.x - lx) < 190 && Math.abs(u.y - ly) < 40) ly = u.y + 42;
+    used.push({ x: lx, y: ly });
+    q.l.el.style.left = lx + 'px'; q.l.el.style.top = ly + 'px'; q.l.el.style.opacity = op;
+    svg += `<line x1="${q.x.toFixed(1)}" y1="${q.y.toFixed(1)}" x2="${lx.toFixed(1)}" y2="${(ly - 4).toFixed(1)}" opacity="${op}"/><circle cx="${q.x.toFixed(1)}" cy="${q.y.toFixed(1)}" r="3" opacity="${op}"/>`;
+  }
+  ui.svg.innerHTML = svg;
+}
+// what the region is doing right now (sequence time or configuration slider)
+function currentPhase(view) {
+  if (view === 'sequence') {
+    const t = seq.t;
+    return t < 14 ? 'assembly' : t < 20 ? 'road' : t < 27 ? 'prepare' : t < 31 ? 'unlock' : t < 37 ? 'convert' : t < 41 ? 'spinup' : t < 47 ? 'hover' : 'cruise';
+  }
+  const c = adv.config;
+  return c < .05 ? 'road' : c < .35 ? 'prepare' : c < .55 ? 'unlock' : c < .98 ? 'convert' : c < 1.05 ? 'hover' : 'cruise';
+}
+function currentState(view) { return view === 'sequence' ? seqState(seq.t) : configState(adv.config); }
+function regionBrief(id, view) {
+  const ph = currentPhase(view), st = currentState(view), M = flightModel(FLIGHT), R = REGION_BY_ID[id];
+  const flying = ph === 'spinup' || ph === 'hover' || ph === 'cruise';
+  const road = view === 'sequence' ? seq.table.v(seq.t) : 0;
+  const elec = flying ? (ph === 'cruise' ? M.cr.P : M.hoverkW) * (ph === 'spinup' && view === 'sequence' ? clamp(st.spin / 2.6) : 1) : road > .5 ? 12 + road * 0.9 : 1.5;
+  const rpm = st.rotorLocked ? road / DATA.meta.tire_R * 60 / (2 * Math.PI) : M.rpmHover * (view === 'sequence' ? clamp(st.spin / 2.6) : flying ? 1 : 0);
+  const PH = { assembly: 'Assembly', road: 'Road mode', prepare: 'Stop & prepare', unlock: 'Unlock & open', convert: 'Converting', spinup: 'Spin-up', hover: 'Hover', cruise: 'Cruise' }[ph];
+  let now = '', figs = [];
+  if (R.kind === 'fan') {
+    const front = id[0] === 'F', share = front ? M.kFront / 2 : (1 - M.kFront) / 2;
+    const T = M.W * share / (ph === 'cruise' ? Math.cos(rad2(M.cr.tilt)) : 1);
+    const per = elec / 4 * (share / .25);
+    const txt = {
+      assembly: 'The corner module docks onto its hardpoint bracket: suspension carrier, conversion yoke, then the wheel module itself.',
+      road: `Rolling at ${fmt(road * 3.6, 0)} km/h. The dog clutch couples the rotor to the rim, so the axial-flux motor drives the tyre through the stator spokes. Blades are feathered at 90° and the petals are closed over them.`,
+      prepare: 'The landing legs take the weight, so this wheel is unloaded. Parking brake on; the module runs its self-test (clutch, lock pins, petal switches, resolver).',
+      unlock: 'The clutch releases the rotor from the rim. The brake caliper and two lock pins index the rim to the module. Petals open into an inlet collector and an exit diffuser; collective drives from 90° towards the hover setting.',
+      convert: `The harmonic-drive actuator is swinging the module about the hinge above the tyre: ${fmt(st.yoke * 90, 0)}° of 90°. The fender cap rides on the yoke; two RVDTs must agree before the next step.`,
+      spinup: `The motor accelerates the 7-blade rotor towards ${fmt(M.rpmHover, 0)} rpm. The seven stator vanes straighten the swirl. ${front === (id[1] === 'L') ? 'This diagonal pair spins counter-clockwise.' : 'This diagonal pair spins clockwise.'}`,
+      hover: `Carrying ${fmt(share * 100, 1)} % of the vehicle weight: ${fmt(T / 1000, 1)} kN, of which the duct lip provides about ${fmt(FLIGHT.duct * 100, 0)} %. Disk loading ${fmt(M.dl / 47.88, 0)} lb/ft².`,
+      cruise: `The gimbal tilts the rotor axis ${fmt(st.tilt, 1)}° forward. Edgewise advance ratio μ ≈ ${fmt(M.cr.mu, 2)} (NASA TM Eq. 7), collective ${fmt(st.pitch, 1)}°.`,
+    };
+    now = txt[ph];
+    figs = [['Rotor speed', `${fmt(rpm, 0)} rpm`], ['Motor power', `${fmt(per, 0)} kW`], ['Thrust', flying ? `${fmt(T / 1000, 2)} kN` : '0 kN'], ['Conversion yoke', `${fmt(st.yoke * 90, 0)}°`],
+      ['Cruise tilt', `${fmt(st.tilt, 1)}°`], ['Collective θ.75', `${fmt(st.pitch, 1)}°`], ['Petals', `${fmt(st.petals * 100, 0)} %`], ['Clutch', st.rotorLocked ? 'Engaged (wheel drive)' : 'Released (rotor free)']];
+  } else if (id === 'battery') {
+    const E = FLIGHT.battery, I = elec * 1000 / 800, C = elec / E;
+    now = { assembly: 'Nineteen modules drop into the floor tray and the rear stack behind the seats; the mica-lined lid seals the pack.',
+      road: `Supplying about ${fmt(elec, 0)} kW for driving: a gentle ${fmt(C, 2)}C. Cold plates run on the low-temperature loop.`,
+      prepare: 'Contactors closed, pre-charge complete. The BMS confirms state of charge and cell temperatures before conversion is allowed.',
+      unlock: 'Small loads only (actuators, petals, pumps). The BMS reserves energy for the flight and the landing.',
+      convert: 'Small loads only (conversion actuators). The BMS holds the flight reserve.',
+      spinup: `Ramping to ${fmt(elec, 0)} kW as the rotors spin up; the chiller pre-cools the cold plates.`,
+      hover: `Discharging at ${fmt(C, 1)}C: about ${fmt(I, 0)} A at 800 V. At this rate the usable ${fmt(E * FLIGHT.usable, 0)} kWh lasts about ${fmt(M.hoverMin, 1)} min.`,
+      cruise: `About ${fmt(elec, 0)} kW (${fmt(C, 1)}C, ${fmt(I, 0)} A). Roughly ${fmt(M.rangeKm, 0)} km of range at this speed from a full pack.` }[ph];
+    figs = [['Cells', `${MASS.cells.toLocaleString()} × 4680`], ['Energy', `${fmt(E, 1)} kWh`], ['Pack power', `${fmt(elec, 0)} kW`], ['Current @ 800 V', `${fmt(I, 0)} A`], ['C-rate', `${fmt(C, 2)}C`], ['Pack mass', `${fmt(MASS.road.bySys['200 Energy storage'], 0)} kg`]];
+  } else if (id === 'power') {
+    now = flying ? `Four SiC inverters each deliver about ${fmt(elec / 4, 0)} kW to their fan motors, controlling RPM for thrust allocation. The junction box fuses every branch; the insulation monitor watches the 800 V system.`
+      : ph === 'road' ? `The inverters run the motors in torque mode for driving (≈${fmt(elec, 0)} kW total) with regenerative braking.` : 'HV system live; the DC-DC converter supplies 14 V to avionics, actuators and the 12 V backup battery.';
+    figs = [['Inverters', '4 × 250 kW SiC'], ['Per inverter', `${fmt(elec / 4, 0)} kW`], ['Bus voltage', '800 V nominal'], ['DC-DC', '3 kW to 14 V'], ['On-board charger', '22 kW AC'], ['DC fast charge', 'CCS2 up to 350 kW']];
+  } else if (id === 'cockpit') {
+    now = flying ? 'The sidestick commands pitch and roll rates and the thrust lever commands climb. The steering yoke is locked centred; the HUD shows flight symbology. The parachute handle is armed overhead.'
+      : ph === 'road' ? 'Steer-by-wire yoke and pedals are active. The sidestick and thrust lever are inhibited. The mode selector reads ROAD.'
+      : 'The driver has selected PREPARE / CONFIGURE on the guarded mode selector. Each step needs confirmation; harnesses must be latched.';
+    figs = [['Occupants', '2 × 90 kg'], ['Mode selector', flying ? 'FLY' : ph === 'road' ? 'ROAD' : 'CONFIGURE'], ['Primary display', 'Pillar-to-pillar OLED'], ['Restraints', '5-point harness + 4 airbags'], ['Parachute handle', flying ? 'ARMED' : 'SAFE']];
+  } else if (id === 'avionics') {
+    now = flying ? 'Three dissimilar flight computers run the control laws and allocate thrust to the four rotors at high rate. The independent monitor can inhibit an unsafe command. Radar altimeters and LiDAR watch the ground.'
+      : 'The flight computers supervise conversion: every actuator move needs agreement between redundant position sensors and lock switches. On the road the VCU runs traction and stability control.';
+    figs = [['Flight computers', '3 (triplex)'], ['IMUs', '3'], ['Air data', '2 pitot-static probes'], ['Height', '2 radar altimeters'], ['Surveillance', 'ADS-B / Mode-S'], ['Cameras', '8 surround']];
+  } else if (id === 'thermal') {
+    const q = elec * .08;
+    now = `About ${fmt(q, 0)} kW of heat from motors, inverters and the battery goes to two front radiators and the chiller. ${flying ? 'In hover the radiator fans run hard because there is little ram air.' : ''}`;
+    figs = [['Heat load', `${fmt(q, 0)} kW`], ['Radiators', '2 front, angled 35°'], ['Pumps', '2 electric'], ['Battery cooling', 'Chiller + cold plates']];
+  } else if (id === 'legs') {
+    const down = st.legs > .98, load = down && !flying ? M.W / 4 : 0;
+    now = down ? `Down and locked. Each leg carries about ${fmt(load / 1000, 1)} kN, keeping the tyres 120 mm off the ground so the wheels can swing up.` : st.legs > .02 ? 'In transit: the ball-screw drives the two telescoping stages.' : flying ? 'Stowed after lift-off; the weight-on-wheels switches confirmed the car is airborne.' : 'Stowed flush with the underbody.';
+    figs = [['Legs', '4 telescoping, 2 stages'], ['Stroke', '550 mm'], ['Load per leg', `${fmt(load / 1000, 1)} kN`], ['State', down ? 'Down & locked' : st.legs > .02 ? 'In transit' : 'Stowed']];
+  } else if (id === 'emergency') {
+    now = flying ? 'Armed. If the vehicle becomes uncontrollable (a single rotor failure leaves it under-actuated) the rocket extracts a whole-vehicle canopy through the rear deck lid.' : 'Safe on the ground; the fire-suppression bottle protects the battery bay at all times.';
+    figs = [['Canopy rating', '2,500 kg'], ['Deployment', 'Rocket extraction'], ['Riser', '4-point to roll hoop & subframe'], ['Battery fire', 'Suppression bottle']];
+  } else if (id === 'structure') {
+    now = 'The carbon tub carries the battery, seats and roll hoop. Welded aluminium subframes pick up the suspension, steering rack and conversion hinges; corner hardpoints feed hinge and leg loads into the tub.';
+    figs = [['Tub', 'CFRP / Nomex sandwich'], ['Subframes', '6061 welded tube'], ['Roll hoop', 'Ti-6Al-4V'], ['Structure mass', `${fmt(MASS.road.bySys['110 Structure'], 0)} kg`]];
+  } else if (id === 'body') {
+    now = 'Panels are trimmed from the body lofted through the A1 surfaces. Fender caps ride on the conversion yokes; gull-wing doors hinge on the roof line; the canopy is laminated polycarbonate.';
+    figs = [['Panels', 'CFRP, Class-A paint'], ['Doors', '2 gull-wing'], ['Glazing', '4 polycarbonate panes'], ['Body mass', `${fmt(MASS.road.bySys['101 Body'], 0)} kg`]];
+  }
+  return { PH, now, figs };
+}
+const REGION_UI = {};
+function initRegionUI(view) {
+  const host = views[view].el;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('class', 'hud-leaders region-leaders'); host.appendChild(svg);
+  const layer = document.createElement('div'); layer.className = 'hud-callouts'; host.appendChild(layer);
+  const chips = document.createElement('div'); chips.className = 'region-chips';
+  chips.innerHTML = '<span>EXPLORE A REGION</span>' + REGIONS.map((r) => `<button data-region="${r.id}">${esc(r.name)}</button>`).join('');
+  host.appendChild(chips);
+  const back = document.createElement('button'); back.className = 'region-back'; back.textContent = '← Back to full vehicle'; back.hidden = true; host.appendChild(back);
+  const brief = document.createElement('aside'); brief.className = 'region-brief'; brief.hidden = true; host.appendChild(brief);
+  const tip = document.createElement('div'); tip.className = 'region-tip'; tip.hidden = true; host.appendChild(tip);
+  REGION_UI[view] = { svg, layer, chips, back, brief, tip };
+  chips.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => (FOCUS.region === b.dataset.region ? exitFocus() : focusRegion(view, b.dataset.region))));
+  back.addEventListener('click', () => exitFocus());
+  host.addEventListener('keydown', (e) => { if (e.key === 'Escape') exitFocus(); });
+  // hover + click picking
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  let down = null, lastMove = 0;
+  const pick = (e) => {
+    const r = host.getBoundingClientRect();
+    ndc.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+    ray.setFromCamera(ndc, views[view].camera);
+    const targets = [];
+    for (const rec of OBJS) { if (!rec.obj.visible || (FOCUS.region && rec.region !== FOCUS.region)) continue; if (rec.obj.isInstancedMesh) targets.push(rec.obj); else rec.obj.children.forEach((c) => c.isMesh && targets.push(c)); }
+    const hit = ray.intersectObjects(targets, false).find((hh) => !renderer.clippingPlanes.length || hh.point.z <= .001);
+    return hit ? { rec: hit.object.userData.rec, hit } : null;
+  };
+  host.addEventListener('pointerdown', (e) => (down = [e.clientX, e.clientY]));
+  host.addEventListener('pointermove', (e) => {
+    if (e.buttons || FOCUS.region || performance.now() - lastMove < 120 || e.target.closest('.region-chips, .region-brief, .region-back')) return;
+    lastMove = performance.now();
+    const h = pick(e), id = h ? h.rec.region : null;
+    if (id !== FOCUS.hover) { FOCUS.hover = id; applyStyle(styleNow); if (view === 'advanced' && adv.isolate) refreshIsolation(); }
+    tip.hidden = !id;
+    if (id) { const r = host.getBoundingClientRect(); tip.textContent = `${REGION_BY_ID[id].long} · ${view === 'advanced' ? 'double-click' : 'click'} to expand`; tip.style.left = (e.clientX - r.left + 14) + 'px'; tip.style.top = (e.clientY - r.top + 14) + 'px'; }
+  });
+  host.addEventListener('pointerleave', () => { tip.hidden = true; if (FOCUS.hover && !FOCUS.region) { FOCUS.hover = null; applyStyle(styleNow); } });
+  const open = (e) => {
+    const h = pick(e); if (!h) return;
+    tip.hidden = true;
+    if (!FOCUS.region) focusRegion(view, h.rec.region, h.rec);
+    else if (view === 'sequence') showPartFromRegion(h.rec.pi);
+  };
+  if (view === 'sequence') host.addEventListener('pointerup', (e) => { if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5 || e.target.closest('.region-chips, .region-brief, .region-back')) return; open(e); });
+  else host.addEventListener('dblclick', (e) => { if (!e.target.closest('.region-chips, .region-brief, .region-back')) open(e); });
+}
+function showPartFromRegion(pi) { showTab('advanced'); document.querySelector('[data-tab="advanced"]')?.click(); setTimeout(() => { setAdvView('3d'); selectPart(pi, -1, true); }, 60); }
+function renderBrief(full) {
+  if (!FOCUS.region) return;
+  const ui = REGION_UI[FOCUS.view], R = REGION_BY_ID[FOCUS.region], B = regionBrief(FOCUS.region, FOCUS.view);
+  if (full || !ui.brief.querySelector('.rb-now')) {
+    const groups = new Map();
+    for (const r of FOCUS.recs) { const p = PARTS[r.pi].def; const g = groups.get(p.assy) || []; if (!g.includes(r.pi)) g.push(r.pi); groups.set(p.assy, g); }
+    const mass = FOCUS.recs.reduce((a, r) => a + PARTS[r.pi].def.mass_kg * r.mtx.length, 0);
+    const pieces = FOCUS.recs.reduce((a, r) => a + r.mtx.length, 0);
+    ui.brief.innerHTML = `<span class="eyebrow">REGION · ${esc(R.id.toUpperCase())}</span><h3>${esc(R.long)}</h3>
+      <div class="rb-phase"></div><p class="rb-now"></p><dl class="kv rb-figs"></dl>
+      <div class="rb-sum">${groups.size} sub-assemblies · ${[...groups.values()].flat().length} unique parts · ${pieces.toLocaleString()} pieces · ${fmt(mass, 1)} kg</div>
+      <div class="rb-groups">${[...groups.entries()].sort().map(([a, list]) => `<details><summary>${esc(a)} <em>${list.length}</em></summary>${list.map((pi) => `<button data-pi="${pi}"><b>${PARTS[pi].def.pn}</b> ${esc(PARTS[pi].def.name)}</button>`).join('')}</details>`).join('')}</div>
+      <p class="rb-hint">${FOCUS.view === 'sequence' ? 'Keep the sequence playing to watch this region change. Click a part to open its datasheet.' : 'Move the configuration slider to see this region in other modes. Click a part to select it.'}</p>`;
+    ui.brief.querySelectorAll('button[data-pi]').forEach((b) => b.addEventListener('click', () => {
+      const pi = +b.dataset.pi;
+      if (FOCUS.view === 'advanced') { selectPart(pi, -1, false); } else showPartFromRegion(pi);
+    }));
+  }
+  ui.brief.querySelector('.rb-phase').textContent = `NOW · ${B.PH.toUpperCase()}`;
+  ui.brief.querySelector('.rb-now').textContent = B.now;
+  ui.brief.querySelector('.rb-figs').innerHTML = B.figs.map(([k, v]) => `<dt>${esc(k.toUpperCase())}</dt><dd>${esc(v)}</dd>`).join('');
+}
+
 // open the remembered tab, or a deep link (#sequence / #advanced / #flight)
 const deep = location.hash.replace('#', '');
 const startTab = MY_TABS[deep] ? deep : MY_TABS[document.body.dataset.startTab] ? document.body.dataset.startTab : null;
 if (startTab) document.querySelector(`[data-tab="${startTab}"]`)?.click();
-window.__jd = { _dbg: { OBJS, PARTS, NODE }, seek: (t) => { seq.playing = false; seq.snap = true; syncPlay(); setSeqTime(t); }, style: (s) => document.querySelector(`[data-seqstyle="${s}"]`).click(), showTab, get DATA() { return DATA; }, MASS, flightModel: () => flightModel(FLIGHT) };
+window.__jd = { _dbg: { OBJS, PARTS, NODE }, focus: (v, id) => focusRegion(v, id), unfocus: () => exitFocus(true), seek: (t) => { seq.playing = false; seq.snap = true; syncPlay(); setSeqTime(t); }, style: (s) => document.querySelector(`[data-seqstyle="${s}"]`).click(), showTab, get DATA() { return DATA; }, MASS, flightModel: () => flightModel(FLIGHT) };

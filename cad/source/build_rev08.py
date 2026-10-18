@@ -1147,9 +1147,9 @@ def build_emergency():
     node('emergency', 'Emergency systems', 'vehicle', system='450')
     part('JD-450-001', 'Ballistic parachute canister', '450 Emergency', 'Whole-vehicle parachute', 'cfrp',
          lambda: tube(0.16, 0.152, 0.50, 'y').fuse(cyl(0.16, 0.008, 'y', (0, -0.25, 0))),
-         process='Filament-wound CFRP canister', criticality='Safety', fn='Houses 1,600 kg-rated recovery parachute')
+         process='Filament-wound CFRP canister', criticality='Safety', fn='Houses a 2,500 kg-rated whole-vehicle recovery parachute')
     part('JD-450-002', 'Parachute pack', '450 Emergency', 'Whole-vehicle parachute', 'textile', lambda: cyl(0.15, 0.40, 'y'),
-         supplier='buy', mass=28.0, process='Purchased BRS-class canopy, 1,600 kg / 90 m/s rating', criticality='Safety')
+         supplier='buy', mass=41.0, process='Purchased BRS-class canopy, 2,500 kg / 90 m/s rating', criticality='Safety')
     part('JD-450-003', 'Extraction rocket motor', '450 Emergency', 'Whole-vehicle parachute', 'steel',
          lambda: union(cyl(0.04, 0.32, 'y'), cone(0.04, 0.0, 0.08, 'y', (0, 0.16, 0))), supplier='buy', criticality='Safety')
     part('JD-450-004', 'Parachute riser / bridle', '450 Emergency', 'Whole-vehicle parachute', 'textile',
