@@ -1517,9 +1517,9 @@ const EXTRAS = [['M3 bolts, nylock nuts and heat-set inserts (assorted kit)', 1,
   ['Battery straps (velcro, 250 mm)', 2, 3], ['2 mm carbon plate blank (400 × 150) or cut service', 1, 35]];
 const TOOLS = [['ExpressLRS transmitter (skip if you own one)', 1, 90], ['6S balance charger', 1, 70], ['LiPo fire-resistant bag', 1, 15]];
 
-function fetchPack(path) {
-  return fetch(new URL(path + '.bin', BASE)).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(path + ' ' + r.status))))
-    .catch(() => fetch(new URL(path + '.json', BASE)).then((r) => r.json()).then((j) => {
+function fetchPack(path, root = BASE) {
+  return fetch(new URL(path + '.bin', root)).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(path + ' ' + r.status))))
+    .catch(() => fetch(new URL(path + '.json', root)).then((r) => r.json()).then((j) => {
       const bin = atob(j.b64), out = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
       return out.buffer;
@@ -1528,8 +1528,13 @@ function fetchPack(path) {
 let miniPromise;
 function bootMini() {
   if (!miniPromise) {
-    const pre = window.__JD_DATA && window.__JD_DATA.mini;
-    miniPromise = (pre ? Promise.resolve([pre.parts, pre.meshes]) : Promise.all([fetch(new URL('data/mini/parts.json', BASE)).then((r) => r.json()), fetchPack('data/mini/meshes')]))
+    const pre = window.__JD_DATA && window.__JD_DATA.mini, files = window.__JD_FILES;
+    // decrypted in place by the password page: BASE is the page itself, so fall back to its advanced/ folder for files the vault lacks
+    const root = window.__JD_DATA ? new URL('advanced/', location.href) : BASE;
+    const json = (r) => (r.ok ? r.json() : Promise.reject(new Error('mini parts ' + r.status)));
+    miniPromise = (pre ? Promise.resolve([pre.parts, pre.meshes])
+      : files && files['advanced/data/mini/parts.json'] ? Promise.resolve([JSON.parse(new TextDecoder().decode(files['advanced/data/mini/parts.json'])), files['advanced/data/mini/meshes.bin']])
+      : Promise.all([fetch(new URL('data/mini/parts.json', root)).then(json), fetchPack('data/mini/meshes', root)]))
       .then(([d, b]) => { MINI.data = d; MINI.buf = b; buildMini(); measureMini(); initProto(); $('proto-loading').remove(); })
       .catch((e) => { const el = $('proto-loading'); if (el) el.textContent = 'PROTOTYPE CAD FAILED TO LOAD: ' + e.message; throw e; });
   }

@@ -73,6 +73,7 @@
   }
   function mount(files) {
     var td = new TextDecoder(), text = function (n) { return td.decode(files[n]); };
+    window.__JD_FILES = files;   // every decrypted file, so new workbench data loads even if this page is an older cached copy
     window.__JD_DATA = { parts: JSON.parse(text('advanced/data/parts.json')), meshes: files['advanced/data/meshes.bin'],
       mini: files['advanced/data/mini/parts.json'] ? { parts: JSON.parse(text('advanced/data/mini/parts.json')), meshes: files['advanced/data/mini/meshes.bin'] } : null };
     var doc = new DOMParser().parseFromString(text('index.html'), 'text/html');
