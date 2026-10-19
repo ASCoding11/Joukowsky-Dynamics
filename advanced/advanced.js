@@ -1504,9 +1504,9 @@ const EDFS = [
 ];
 const ESCS = [{ label: '60 A', A: 60, m: .060, price: 35 }, { label: '80 A', A: 80, m: .075, price: 45 }, { label: '100 A (CADed)', A: 100, m: .095, price: 55 }, { label: '120 A', A: 120, m: .115, price: 75 }];
 const SERVOS = [{ label: '20 kg·cm', tq: 20, m: .055, price: 18 }, { label: '25 kg·cm', tq: 25, m: .062, price: 22 }, { label: '35 kg·cm (CADed)', tq: 35, m: .070, price: 28 }, { label: '60 kg·cm (large case)', tq: 60, m: .150, price: 55 }];
-const PROTO_DEFAULT = { edf: 3, esc: 2, servo: 2, S: 6, mAh: 5000, C: 75, packs: 2, batX: 0, kInst: .92, usable: .8, misc: .19 };
+const PROTO_DEFAULT = { edf: 3, motor: 1, esc: 2, servo: 2, S: 6, mAh: 5000, C: 75, packs: 2, batX: 0, kInst: .92, usable: .8, misc: .19 };
 const PROTO_INPUTS = [
-  ['Propulsion', [['edf', 'Ducted fan (×4)', 'sel', EDFS], ['esc', 'ESC (×4)', 'sel', ESCS], ['kInst', 'Installed thrust (inlet + pod losses)', '', .8, 1, .01]]],
+  ['Propulsion', [['edf', 'Ducted fan (×4)', 'sel', EDFS], ['motor', 'Fan motor (×4)', 'sel', [{ label: 'JDM-M40, built yourself (CADed)', v: 1 }, { label: 'Stock motor bought with the fan', v: 0 }]], ['esc', 'ESC (×4)', 'sel', ESCS], ['kInst', 'Installed thrust (inlet + pod losses)', '', .8, 1, .01]]],
   ['Battery', [['S', 'Cells in series', 'sel', [{ label: '4S (14.8 V)', v: 4 }, { label: '6S (22.2 V)', v: 6 }]], ['mAh', 'Capacity per pack', 'mAh', 3000, 10000, 100], ['C', 'Continuous C rating', 'C', 25, 100, 5],
     ['packs', 'Packs in parallel', '', 1, 2, 1], ['usable', 'Capacity used before landing', '', .6, .9, .01], ['batX', 'Battery position (+ = forward)', 'mm', -40, 40, 1]]],
   ['Pods and airframe', [['servo', 'Conversion servo (×4)', 'sel', SERVOS], ['misc', 'Wiring, screws, paint', 'kg', .05, .5, .01]]],
@@ -1515,6 +1515,8 @@ const FIL = { lwpla: ['LW-PLA', 40, 10], petg: ['PETG', 22, 18], tpu: ['TPU 95A'
 const BUY = { 'JDM-404': 75, 'JDM-405': 30, 'JDM-406': 15, 'JDM-408': 15, 'JDM-409': 15, 'JDM-410': 1.2, 'JDM-411': 3 };
 const EXTRAS = [['M3 bolts, nylock nuts and heat-set inserts (assorted kit)', 1, 15], ['XT90 connectors, XT90 parallel lead, 10 / 12 AWG silicone wire', 1, 30], ['Servo extension leads, 300 mm', 4, 2],
   ['Battery straps (velcro, 250 mm)', 2, 3], ['2 mm carbon plate blank (400 × 150) or cut service', 1, 35]];
+const MOTOR_COST = { 'JDM-501': 20, 'JDM-502': 0, 'JDM-503': 1.8, 'JDM-504': 31, 'JDM-505': 4, 'JDM-506': 7, 'JDM-507': 15 };   // per item: laser-cut stack, wire costed below, magnet arc, bell blank + shop turning, …
+const MOTOR_EXTRAS = [['Class-H magnet wire Ø0.46 mm, 250 g spool (winds all four)', 1, 15], ['Impregnating varnish + high-temp magnet epoxy', 1, 18], ['3.5 mm bullet connectors, silicone leads', 4, 3]];
 const TOOLS = [['ExpressLRS transmitter (skip if you own one)', 1, 90], ['6S balance charger', 1, 70], ['LiPo fire-resistant bag', 1, 15]];
 
 function fetchPack(path, root = BASE) {
@@ -1546,6 +1548,7 @@ const MINI_EXPLODE = {
   'JDM-402': [0, .05, 0], 'JDM-406': [0, .06, 0], 'JDM-408': [0, .05, 0], 'JDM-409': [0, .06, 0],
   'JDM-209': [0, -.02, -.03], 'JDM-205': [0, .03, 0], 'JDM-410': [0, .06, 0], 'JDM-407': [.05, .03, 0], 'JDM-411': [0, .05, .02], 'JDM-208': [0, .02, .03],
   'JDM-206': [0, 0, .05], 'JDM-207': [0, 0, .11], 'JDM-401': [0, 0, -.02],
+  'JDM-507': [0, 0, -.07], 'JDM-506': [0, 0, -.085], 'JDM-501': [0, 0, -.1], 'JDM-502': [0, 0, -.1], 'JDM-503': [0, 0, -.13], 'JDM-504': [0, 0, -.13], 'JDM-505': [0, 0, -.16],
 };
 function buildMini() {
   const D = MINI.data, sc = MINI.scene = new THREE.Scene();
@@ -1588,7 +1591,8 @@ function measureMini() {
   MINI.nodes.my_FL.group.getWorldPosition(hinge);
   const edf = items.filter((it) => it.pn === 'JDM-401');
   const fl = edf.find((it) => it.corner === 'FL');
-  const pod = items.filter((it) => it.corner === 'FL' && ['JDM-206', 'JDM-207', 'JDM-401', 'JDM-208', 'JDM-411'].includes(it.pn));
+  const pod = items.filter((it) => it.corner === 'FL' && (['JDM-206', 'JDM-207', 'JDM-401', 'JDM-208', 'JDM-411'].includes(it.pn) || it.pn.startsWith('JDM-50')));
+  const motorM = items.filter((it) => it.corner === 'FL' && it.pn.startsWith('JDM-50')).reduce((a, b) => a + b.m, 0);
   const podM = pod.reduce((a, b) => a + b.m, 0), podZ = pod.reduce((a, b) => a + b.m * b.p.z, 0) / podM;
   poseMini(0, 0); MINI.root.updateMatrixWorld(true);
   MINI.nodes.my_FL.group.getWorldPosition(hingeR);
@@ -1596,15 +1600,33 @@ function measureMini() {
   MINI.cad = {
     items, xf: edf.filter((e) => e.p.x > 0).reduce((a, b) => a + b.p.x, 0) / 2, xr: edf.filter((e) => e.p.x < 0).reduce((a, b) => a + b.p.x, 0) / 2,
     thrustArm: Math.abs(fl.p.z - hinge.z), podArm: Math.abs(podZ - hinge.z), podRadius: Math.hypot(podRoad.y - hingeR.y, podRoad.z - hingeR.z),
-    podCadM: podM, chassisY: MINI.data.meta.chassis_y, hingeY: hinge.y,
+    podCadM: podM, motorM, fanM: MINI.data.parts.find((p) => p.pn === 'JDM-401').mass_kg, chassisY: MINI.data.meta.chassis_y, hingeY: hinge.y,
   };
   poseMini(MINI.conv, MINI.explode);
+}
+// JDM-M40 on the 90 mm fan: torque balance Ke·I = Q_fan(ω) + P_fixed(ω)/ω, voltage Vm = Ke·ω + I·R (motor_design.py)
+function motorOnFan(T, Vb, kInst) {
+  const MT = MINI.data.meta.motor, D = MT.design, F = MT.fan, fc = MT.fixed_curve;
+  const pfix = (w) => { const s = fc[1][0] - fc[0][0], i = clamp(Math.floor(w / s), 0, fc.length - 2), t = (w - fc[i][0]) / s; return fc[i][1] + t * (fc[i + 1][1] - fc[i][1]); };
+  const at = (w) => { const Q = F.Q_r * (w / F.w_r) ** 2, Pf = pfix(w), I = (Q + Pf / w) / D.Ke, Vm = w * D.Ke + I * D.R;
+    return { w, rpm: w * 30 / Math.PI, Q, I, Vm, Pf, Pcu: I * I * D.R, T: kInst * F.T_r * (w / F.w_r) ** 2, eff: Q * w / (Vm * I) }; };
+  if (T != null) { const r = at(F.w_r * Math.sqrt(T / (kInst * F.T_r))); if (r.Vm <= Vb) return { ...r, sat: false }; }
+  let lo = 50, hi = 9000;
+  for (let k = 0; k < 50; k++) { const mid = (lo + hi) / 2; if (at(mid).Vm > Vb) hi = mid; else lo = mid; }
+  return { ...at(lo), sat: T != null };
+}
+function motorThermal(r) {           // lumped convection to the exhaust stream; returns winding rise (K) and time constant (s)
+  const MT = MINI.data.meta.motor, th = MT.thermal, h = th.h[0] * (th.h[1] + th.h[2] * r.w / MT.fan.w_r) ** th.h[3];
+  const R = 1 / (h * th.A) + th.R_int;
+  return { dT: (r.Pcu + r.Pf) * R, tau: R * th.C };
 }
 function protoModel(c) {
   const e = EDFS[c.edf], esc = ESCS[c.esc], sv = SERVOS[c.servo], cad = MINI.cad;
   const sleeve = e.od < .0975 ? .025 : 0;                      // printed adaptor sleeve for a smaller casing in the 98 mm duct ring
+  const custom = c.motor === 1 && c.edf === 3;                  // the JDM-M40 is sized for the 90 mm fan only
   const packWh = c.S * 3.7 * c.mAh / 1000, packM = packWh * .0071 + .015, packVol = packWh * 2.68;
-  const over = { 'JDM-401': e.m + sleeve, 'JDM-402': esc.m, 'JDM-407': sv.m };
+  const over = { 'JDM-401': custom ? cad.fanM : e.m + sleeve, 'JDM-402': esc.m, 'JDM-407': sv.m };
+  if (!custom) for (const it of cad.items) if (it.pn.startsWith('JDM-50')) over[it.pn] = 0;
   const pts = [], bat = cad.items.filter((it) => it.pn === 'JDM-403').sort((a, b) => a.p.y - b.p.y)[0];
   for (let k = 0; k < c.packs; k++) pts.push([packM, bat.p.x + c.batX / 1000, bat.p.y + k * .041, bat.p.z]);   // packs stack on the tray
   for (const it of cad.items) {
@@ -1620,35 +1642,52 @@ function protoModel(c) {
   // battery: open-circuit 3.85 V per cell at mid charge; resistance scales with capacity and C rating; 4 mΩ of wiring and connectors
   const Ah = c.mAh / 1000 * c.packs, Rpack = c.S * .003 * (5000 / c.mAh) * Math.sqrt(60 / c.C) / c.packs + .004, Voc = c.S * 3.85, Vr = e.S * 3.7;
   // fixed-pitch fan: thrust ∝ rpm², power ∝ rpm³, so at a fixed voltage I ∝ T^1.5; full-throttle thrust ∝ V², current ∝ V²
-  const op = (Tlist) => {
-    let V = Voc, out = null;
+  const op = (Tlist, V0 = Voc) => {
+    let V = V0, out = null;
     for (let k = 0; k < 40; k++) {
       const s = V / Vr, Tmax = e.T * 9.81 * c.kInst * s * s, Imax = e.A * s * s;
       const per = Tlist.map((T) => { const x = T == null ? 1 : Math.min(1, T / Tmax); return { x, I: Imax * x ** 1.5, sat: T != null && T > Tmax }; });
       const I = per.reduce((a, b) => a + b.I, 0) + 1.5;    // + flight controller, receiver, GNSS and servo holding current
-      const Vn = Math.max(.6 * Voc, Voc - I * Rpack);
+      const Vn = Math.max(.6 * V0, V0 - I * Rpack);
       out = { V: Vn, I, per, Tmax, Imax };
       if (Math.abs(Vn - V) < 1e-5) break;
       V = .5 * (V + Vn);
     }
     return out;
   };
-  const hv = op([Tf, Tf, Tr, Tr]), full = op([null, null, null, null]);
+  const opM = (Tlist, V0 = Voc) => {                          // custom motor: motor, fan and battery solved together
+    let V = V0, out = null;
+    for (let k = 0; k < 40; k++) {
+      const Vb = .97 * V, fmax = motorOnFan(null, Vb, c.kInst);
+      const per = Tlist.map((T) => { const r = motorOnFan(T, Vb, c.kInst); return { ...r, x: r.T / fmax.T, I: r.Vm * r.I / (.97 * V), Im: r.I }; });
+      const I = per.reduce((a, b) => a + b.I, 0) + 1.5;
+      const Vn = Math.max(.6 * V0, V0 - I * Rpack);
+      out = { V: Vn, I, per, Tmax: fmax.T, Imax: fmax.I, fmax };
+      if (Math.abs(Vn - V) < 1e-5) break;
+      V = .5 * (V + Vn);
+    }
+    return out;
+  };
+  const hv = custom ? opM([Tf, Tf, Tr, Tr]) : op([Tf, Tf, Tr, Tr]), full = custom ? opM([null, null, null, null]) : op([null, null, null, null]);
+  const fresh = (custom ? opM : op)([null, null, null, null], c.S * 4.15);   // full throttle on a freshly charged pack
+  // throttle cap that holds a fresh pack's current to 85 % of the ESC rating (current ∝ duty^1.5·V² for a fan load)
+  const cap = Math.min(1, (.85 * esc.A / fresh.Imax) ** (1 / 3));
   const twr = 4 * full.Tmax / W, xMax = Math.max(...hv.per.map((p) => p.x));
   const hoverMin = c.usable * Ah / hv.I * 60;
-  const podM = cad.podCadM - .42 + e.m + sleeve;
+  const podM = cad.podCadM - cad.fanM - cad.motorM + (custom ? cad.fanM + cad.motorM : e.m + sleeve);
   const conv = podM * cad.podRadius * 100;                                   // kg·cm, worst case (pod arm horizontal)
   const holdHover = Math.abs(Math.max(Tf, Tr) / 9.81 * cad.thrustArm - podM * cad.podArm) * 100;
   const holdFull = Math.abs(full.Tmax / 9.81 * cad.thrustArm - podM * cad.podArm) * 100;
   const dYaw = rad(5), Myaw = 2 * Tf * Math.sin(dYaw) * (cad.xf - cg.x) + 2 * Tr * Math.sin(dYaw) * (cg.x - cad.xr), aYaw = Myaw / Iyaw;
   const Df = e.od - .008, Afan = Math.PI / 4 * (Df * Df - (.4 * Df) ** 2), dl = W / (4 * Afan);
-  return { e, esc, sv, m, W, cg, kf, Tf, Tr, hv, full, twr, xMax, hoverMin, Ah, packWh, packM, packVol, sleeve, podM, conv, holdHover, holdFull, Myaw, aYaw, Iyaw, dl, Afan, Rpack, Voc };
+  return { custom, fresh, cap, e, esc, sv, m, W, cg, kf, Tf, Tr, hv, full, twr, xMax, hoverMin, Ah, packWh, packM, packVol, sleeve, podM, conv, holdHover, holdFull, Myaw, aYaw, Iyaw, dl, Afan, Rpack, Voc };
 }
 function protoChecks(c, M) {
   const k = (ok, mid) => (ok ? 'ok' : mid ? 'mid' : 'bad'), cad = MINI.cad;
   const dx = (M.cg.x - (cad.xf + cad.xr) / 2) * 1000, Ipack = M.full.I / M.Ah, Ihv = M.hv.I / M.Ah;
   return [
     ['Fan fits the pod duct ring', `${fmt(M.e.od * 1000, 0)} mm casing`, '≤ 98 mm bore', k(M.e.od <= .0985 && !M.sleeve, M.e.od <= .0985), M.sleeve ? `Smaller casing: print a ${fmt((.0984 - M.e.od) / 2 * 1000, 1)} mm-wall adaptor sleeve (adds ${fmt(M.sleeve * 4000, 0)} g) and expect extra inlet loss.` : 'The duct ring is CADed around a 98 mm casing with a 0.4 mm clamp gap.'],
+    ...(c.motor === 1 && c.edf !== 3 ? [['Custom motor matches the fan', 'JDM-M40 on a smaller fan', '90 mm fan only', 'bad', 'The JDM-M40 is sized for the 90 mm rotor; the stock motor is used in the numbers instead.']] : []),
     ['Cells vs fan rating', `${c.S}S on a ${M.e.S}S fan`, `= ${M.e.S}S`, k(c.S === M.e.S, c.S < M.e.S), c.S > M.e.S ? 'Over-volting spins the fan past its rated speed: motor and rotor can fail. Do not fly.' : c.S < M.e.S ? 'Under-volting is safe but thrust falls with the square of voltage.' : 'Matches the fan’s rated voltage.'],
     ['Thrust-to-weight (full throttle, sagged)', `${fmt(M.twr, 2)} : 1`, '≥ 2.0 (≥ 1.6 marginal)', k(M.twr >= 2, M.twr >= 1.6), `${fmt(4 * M.full.Tmax / 9.81, 2)} kg of thrust at ${fmt(M.full.V, 1)} V for ${fmt(M.m, 2)} kg. Below about 1.6 there is no margin to hold attitude in wind.`],
     ['Hover throttle, most-loaded fan', `${fmt(M.xMax * 100, 0)} % of max thrust`, '≤ 55 % (≤ 70 % marginal)', k(M.xMax <= .55, M.xMax <= .7), `Front / rear thrust split ${fmt(M.kf * 100, 0)} / ${fmt((1 - M.kf) * 100, 0)} % from the CG.`],
@@ -1656,6 +1695,8 @@ function protoChecks(c, M) {
     ['Battery current at full throttle', `${fmt(Ipack, 0)}C (${fmt(M.full.I, 0)} A)`, `≤ ${c.C}C rating`, k(Ipack <= c.C * .8, Ipack <= c.C), `Hover draws ${fmt(Ihv, 0)}C. Real packs deliver well under their label, hence the 80 % target.`],
     ['Voltage sag at full throttle', `${fmt(M.full.V / c.S, 2)} V per cell`, '≥ 3.4 V (≥ 3.2 marginal)', k(M.full.V / c.S >= 3.4, M.full.V / c.S >= 3.2), `Pack resistance ${fmt(M.Rpack * 1000, 0)} mΩ including wiring.`],
     ['ESC current, full throttle', `${fmt(M.full.Imax, 0)} A per fan`, `≤ 85 % of ${M.esc.A} A`, k(M.full.Imax <= .85 * M.esc.A, M.full.Imax <= M.esc.A), 'Fan current at full throttle and sagged voltage.'],
+    ['ESC current on a fresh pack', `${fmt(M.fresh.Imax, 0)} A per fan`, `≤ 85 % of ${M.esc.A} A`, M.fresh.Imax <= .85 * M.esc.A ? 'ok' : M.cap >= .85 ? 'mid' : 'bad',
+      M.fresh.Imax <= .85 * M.esc.A ? 'A fully charged pack sags less, so the fans spin faster and draw more.' : `A fully charged pack sags less and the fans draw more. Cap the throttle at ${fmt(M.cap * 100, 0)} % (ArduPilot MOT_SPIN_MAX) or set an ${fmt(.85 * M.esc.A, 0)} A current limit in the ESCs; thrust on a sagged pack is not affected.`],
     ['Battery fits the tray and body', `${fmt(M.packVol * c.packs, 0)} cm³`, '≤ 620 cm³', k(M.packVol * c.packs <= 620, M.packVol * c.packs <= 720), `${c.packs} × ${c.S}S ${c.mAh} mAh, about ${fmt(M.packM * 1000, 0)} g each. The tray is 170 × 60 mm with about 60 mm of height under the shell.`],
     ['CG over the thrust centre (fore-aft)', `${fmt(dx, 0)} mm ${dx >= 0 ? 'forward' : 'aft'}`, '≤ 8 mm (≤ 20 marginal)', k(Math.abs(dx) <= 8, Math.abs(dx) <= 20), `Slide the battery to move it: about ${fmt(M.packM * c.packs / M.m, 2)} mm of CG per mm of battery travel.`],
     ['CG lateral', `${fmt(M.cg.z * 1000, 1)} mm`, '≤ 3 mm', k(Math.abs(M.cg.z) <= .003, Math.abs(M.cg.z) <= .006), 'Mirror-image layout; route wiring to keep it centred.'],
@@ -1699,6 +1740,12 @@ const PROTO_STEPS = [
     doIt: ['Slide the fan into the duct ring from the exhaust side so the inlet sits behind the bell-mouth lip; clamp with the two M3 pinch bolts.',
       'Stretch the TPU tyre ring over the band (warm it in hot water first).', 'Bolt each pod to its swing arm at the servo-arm boss; run the three motor wires along the arm with a loop at the hinge.'],
     check: 'Spin each fan by hand: no rubbing. Swing each pod 0–90°: the wires don’t pull tight.' },
+  { t: 'Build and fit the fan motors', time: '≈ 3 h per motor', add: ['JDM-501', 'JDM-502', 'JDM-503', 'JDM-504', 'JDM-505', 'JDM-506', 'JDM-507'], pose: 0,
+    what: 'Each fan is driven by a JDM-M40: a 40 mm outrunner you wind and assemble yourself, sized for this fan and this battery. The full procedure, winding table and checks are in the “Custom fan motor” section below.',
+    doIt: ['Wind 12 tooth coils (10 turns of 0.46 mm wire each), connect them as the winding table shows, varnish and bake.',
+      'Bond 10 magnets in the 4140 bell, alternating poles, press the bearings into the hub and assemble the rotor on its shaft.',
+      'Measure Kv with a drill and a multimeter, balance the motor with the fan rotor fitted, then bolt it into the fan’s motor mount.'],
+    check: 'All four motors within 3 % of each other on Kv and phase resistance; each runs 3 min at hover throttle on the bench below 80 °C.' },
   { t: 'Power and electronics', time: '2 h', add: ['JDM-402', 'JDM-408', 'JDM-409', 'JDM-404', 'JDM-405', 'JDM-406'], pose: 0,
     what: 'Two packs in parallel feed a distribution board, four ESCs and a separate servo BEC; the flight controller runs everything. One pack sags too far at full throttle (see the checks).',
     doIt: ['Solder the PDB: XT90 input, four ESC pads, a 5 V feed to the flight controller and the BEC input.', 'Mount the ESCs on the plate near their pods; solder motor wires (swap two to reverse a fan).',
@@ -1720,6 +1767,7 @@ const PROTO_STEPS = [
     doIt: ['Flash ArduCopter. Frame: Quad X. Calibrate accelerometers, compass and radio. Set the ESC protocol to DShot.',
       'Add a short Lua script: a switch slews all four pod servos 0° ↔ 90° over 2 s and blocks arming unless all pods are at 90°.',
       'Map yaw to differential pod tilt in the same script (±5°, front pair opposite the rear pair) and turn down the motors’ own yaw mixing; EDF stators make fan-torque yaw weak.',
+      'Cap the throttle with MOT_SPIN_MAX (or set a current limit in the ESCs) to the value the checks table gives, so a freshly charged pack cannot overdrive the ESCs.',
       'Set a battery failsafe (land at 3.5 V per cell), a radio failsafe (land) and a geofence.'],
     check: 'Pods convert both ways on the switch. Arming refuses in road position. Tilting the model makes the motors respond correctly in the motor-test page.' },
   { t: 'First hover', time: '', add: [], all: true, pose: 1,
@@ -1791,19 +1839,21 @@ function renderProtoInputs() {
 function protoCost(c, M) {
   const rows = [], add = (grp, pn, name, qty, unit, note = '') => rows.push({ grp, pn, name, qty, unit, total: qty * unit, note });
   for (const p of MINI.data.parts) {
-    if (p.supplier === 'buy') continue;
+    if (p.supplier === 'buy' || p.pn.startsWith('JDM-50')) continue;
     if (p.material === 'cf_plate') continue;   // costed with the plate blank in the extras
     const f = FIL[p.material] || FIL.petg, g = p.mass_kg * 1000 * p.qty * 1.15;
     add('Printed', p.pn, `${p.name} (${f[0]}, ${fmt(g, 0)} g incl. waste)`, 1, g / 1000 * f[1], `${fmt(g / f[2], 1)} h`);
   }
-  for (const p of MINI.data.parts.filter((q) => q.supplier === 'buy')) {
-    if (p.pn === 'JDM-401') add('Purchased', p.pn, M.e.label.replace(' (CADed)', '') + ' ducted fan unit', 4, M.e.price);
+  for (const p of MINI.data.parts.filter((q) => q.supplier === 'buy' || q.pn.startsWith('JDM-50'))) {
+    if (p.pn.startsWith('JDM-50')) { if (M.custom) add('Fan motors (JDM-M40)', p.pn, p.name, p.qty, MOTOR_COST[p.pn] ?? 5); continue; }
+    if (p.pn === 'JDM-401') add('Purchased', p.pn, M.custom ? '90 mm 12-blade fan unit, no motor (housing + rotor)' : M.e.label.replace(' (CADed)', '') + ' ducted fan unit with motor', 4, M.custom ? 45 : M.e.price);
     else if (p.pn === 'JDM-402') add('Purchased', p.pn, `${M.esc.A} A ESC, BLHeli_32 / AM32`, 4, M.esc.price);
     else if (p.pn === 'JDM-403') add('Purchased', p.pn, `${c.S}S ${c.mAh} mAh ${c.C}C LiPo`, c.packs, Math.round(.75 * M.packWh + 10));
     else if (p.pn === 'JDM-407') add('Purchased', p.pn, `${M.sv.tq} kg·cm metal-gear digital servo`, 4, M.sv.price);
     else add('Purchased', p.pn, p.name, p.qty, BUY[p.pn] ?? 10);
   }
   if (M.sleeve) add('Printed', 'JDM-206A', 'Fan adaptor sleeve (PETG)', 4, .5);
+  if (M.custom) for (const [n, q, u] of MOTOR_EXTRAS) add('Fan motors (JDM-M40)', '', n, q, u);
   for (const [n, q, u] of EXTRAS) add('Hardware', '', n, q, u);
   for (const [n, q, u] of TOOLS) add('If you don’t own them', '', n, q, u);
   return rows;
@@ -1842,11 +1892,12 @@ function renderProto() {
         <td><a href="${STL}${p.pn}.stl" target="_blank" rel="noopener">STL</a>${p.handed ? ` · <a href="${STL}${p.pn}-LH.stl" target="_blank" rel="noopener">LH</a>` : ''} · <a href="${STEP}${p.pn}.step" target="_blank" rel="noopener">STEP</a></td></tr>`).join('')}</tbody></table></div>
       <p>Full assembly: <a href="${REPO.replace('/blob/', '/raw/')}cad/mini/Joukowsky-Dynamics-mini-prototype-assembly.step.zip" target="_blank" rel="noopener">assembly STEP (zip)</a> · <a href="${REPO}cad/mini/Joukowsky-Dynamics-mini-prototype-BOM.csv" target="_blank" rel="noopener">BOM CSV</a>. Masses are CAD volumes at the stated effective densities.</p></article>
     <article class="chart-card"><span class="ref">prices are typical 2026 hobby-shop figures in USD · your configuration</span><h4>Parts list and cost</h4>
-      <div class="bom-summary"><span>Build <b>$${fmt(build, 0)}</b></span><span>Printed <b>$${fmt(groupSum('Printed'), 0)}</b></span><span>Purchased <b>$${fmt(groupSum('Purchased'), 0)}</b></span><span>Hardware <b>$${fmt(groupSum('Hardware'), 0)}</b></span><span>Radio, charger, bag <b>$${fmt(tools, 0)}</b></span></div>
+      <div class="bom-summary"><span>Build <b>$${fmt(build, 0)}</b></span><span>Printed <b>$${fmt(groupSum('Printed'), 0)}</b></span><span>Purchased <b>$${fmt(groupSum('Purchased'), 0)}</b></span>${M.custom ? `<span>Fan motors <b>$${fmt(groupSum('Fan motors (JDM-M40)'), 0)}</b></span>` : ''}<span>Hardware <b>$${fmt(groupSum('Hardware'), 0)}</b></span><span>Radio, charger, bag <b>$${fmt(tools, 0)}</b></span></div>
       <div class="proto-table"><table class="bom-table"><thead><tr><th>Part</th><th>Item</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead><tbody>
-        ${['Purchased', 'Printed', 'Hardware', 'If you don’t own them'].map((g) => `<tr class="grp"><td colspan="5">${esc(g.toUpperCase())}</td></tr>${table(grp(g))}`).join('')}</tbody></table></div></article>
+        ${['Purchased', 'Fan motors (JDM-M40)', 'Printed', 'Hardware', 'If you don’t own them'].map((g) => `<tr class="grp"><td colspan="5">${esc(g.toUpperCase())}</td></tr>${table(grp(g))}`).join('')}</tbody></table></div></article>
     <article class="chart-card"><span class="ref">battery packs in parallel · one PDB · four ESCs · servo BEC · ArduPilot flight controller</span><h4>Wiring diagram</h4>${wiringSvg(c, M)}
       <p>Motor outputs follow ArduPilot Quad X order: 1 front-right, 2 rear-left, 3 front-left, 4 rear-right. Servos take outputs 5–8 but their power comes from the BEC, because four servos holding against thrust can draw more than a flight controller’s 5 V rail can give. Leave a loop in each motor lead where it crosses the hinge.</p></article>
+    ${motorSection(c, M)}
     <div class="flight-notes">
       <div><h4>What the miniature proves</h4><ul>
         <li>The pod swing: hinge position, clearances to the body and tyre, and the actuator torque, with the full-size layout.</li>
@@ -1870,6 +1921,84 @@ function renderProto() {
         <p>Pods are about 2.5 × deeper than scale so a ducted fan fits; the pockets in the body are cut deeper to match.</p></div>
     </div>`;
 }
+// --- 08 · custom fan motor section
+const MOTOR_STEPS = [
+  ['Laminations', 'Order the stator as a stack of 0.2 mm NO20 electrical-steel laminations from a laser or wire-EDM lamination service (STEP outline JDM-501), or buy a 12-tooth stator blank with the same outside diameter, bore and stack height. Stack them on a 14.4 mm mandrel with the teeth aligned, bond with thin bonding varnish, deburr the slot edges, then insulate the slots with 0.1 mm Nomex paper or a coat of epoxy powder.'],
+  ['Wind the teeth', 'Wind every tooth in the same direction: 10 turns of Ø0.46 mm class-H (200 °C) magnet wire, tight and in layers, starting at the yoke. Mark each start lead with a dab of paint. A printed winding comb holding the lamination stack makes this a 40-minute job.'],
+  ['Connect the coils', 'Follow the winding table: in each phase the four coils are joined in parallel, with “reversed” coils connected finish-to-start. Then join the three phases in delta (A finish → B start, B finish → C start, C finish → A start) and solder the three leads. Sleeve every joint.'],
+  ['Varnish', 'Dip or trickle impregnating varnish into the winding and bake it as the varnish datasheet says. This locks the turns against vibration and adds a second layer of insulation.'],
+  ['Rotor bell', 'Turn the 4140 tube to 40.0 mm outside diameter with a 34.0 mm bore, face it to length, and drill the six vent holes and the shaft boss (drawing JDM-504). The bore must run true within 0.02 mm, or the magnets will rub.'],
+  ['Magnets', 'Bond the 10 arcs inside the bell with high-temperature magnet epoxy, poles alternating N / S facing inward, using a printed spacer ring to keep the gaps even. Check the alternation with a compass before the epoxy sets. Centrifugal force presses outrunner magnets into the bell, so the glue only has to locate them.'],
+  ['Hub and bearings', 'Press the two 685 hybrid ceramic bearings into the turned 6061 hub with retaining compound, then press the stator onto the hub, leads to the rear.'],
+  ['Assemble', 'Push the shaft through the bearings, press the bell onto the shaft’s flat and lock it with a grub screw, and fit the rear collar with 0.05 mm of end play. Turn it by hand: it should cog evenly with no rubbing.'],
+  ['Check Kv', 'Spin the motor with a drill at a known speed and measure the line-to-line AC voltage. Kv ≈ rpm ÷ (1.41 × V rms). Expect __KV__ rpm/V ± 5 %. Measure the three line-to-line resistances: they must match within 3 %.'],
+  ['Balance and test', 'Fit the fan rotor and balance the pair on a magnetic balancer. Bench-run on a current-limited supply, then 3 min at hover throttle in the duct with an IR thermometer: winding below 80 °C. Repeat for all four motors.'],
+];
+function windingSvg(D) {
+  const cx = 150, cy = 150, ph = { A: 'var(--s1)', B: 'var(--s2)', C: 'var(--s3)' };
+  let s = `<svg viewBox="0 0 300 300" class="winding" role="img" aria-label="Winding layout: ${D.Ns} teeth and ${D.P} magnets">`;
+  for (let k = 0; k < D.P; k++) {   // magnets on the bell
+    const a0 = (k / D.P) * 2 * Math.PI, a1 = a0 + 2 * Math.PI / D.P * .86, r0 = 118, r1 = 132;
+    const pt = (r, a) => `${(cx + r * Math.cos(a)).toFixed(1)} ${(cy + r * Math.sin(a)).toFixed(1)}`;
+    s += `<path d="M${pt(r0, a0)} A${r0} ${r0} 0 0 1 ${pt(r0, a1)} L${pt(r1, a1)} A${r1} ${r1} 0 0 0 ${pt(r1, a0)}Z" class="${k % 2 ? 'ms' : 'mn'}"/>`;
+    const am = (a0 + a1) / 2; s += `<text x="${cx + 140 * Math.cos(am)}" y="${cy + 140 * Math.sin(am) + 3}" text-anchor="middle">${k % 2 ? 'S' : 'N'}</text>`;
+  }
+  [...D.pattern].forEach((ch, k) => {
+    const a = (k + .5) / D.Ns * 2 * Math.PI - Math.PI / 2, P = ch.toUpperCase(), rev = ch !== P;
+    const x = cx + 82 * Math.cos(a), y = cy + 82 * Math.sin(a);
+    s += `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(a * 180 / Math.PI + 90).toFixed(1)})"><rect x="-10" y="-22" width="20" height="44" rx="3" fill="${ph[P]}" opacity="${rev ? .45 : .9}"/></g>`;
+    s += `<text x="${cx + 82 * Math.cos(a)}" y="${cy + 82 * Math.sin(a) + 4}" text-anchor="middle" class="ttl">${P}${rev ? '′' : ''}</text>`;
+    s += `<text x="${cx + 50 * Math.cos(a)}" y="${cy + 50 * Math.sin(a) + 3}" text-anchor="middle">${k + 1}</text>`;
+  });
+  s += `<circle cx="${cx}" cy="${cy}" r="34" class="hub"/><text x="${cx}" y="${cy + 4}" text-anchor="middle">Ø14.4</text></svg>`;
+  return s;
+}
+function motorSection(c, M) {
+  const MT = MINI.data.meta.motor, D = MT.design, E = MT.eval;
+  const teeth = { A: [], B: [], C: [] };
+  [...D.pattern].forEach((ch, k) => teeth[ch.toUpperCase()].push(`${k + 1}${ch === ch.toUpperCase() ? '' : '′'}`));
+  const cadM = MINI.cad.motorM;
+  let ops = '', checks = '', chart = '';
+  if (M.custom) {
+    const hv = M.hv.per.reduce((a, b) => (b.Im > a.Im ? b : a)), fu = M.full.fmax, fc = M.fresh.fmax;
+    const tH = motorThermal(hv), tF = motorThermal(fu), Th = 40 + tH.dT, Tb = Th + (tF.dT - tH.dT) * (1 - Math.exp(-20 / tF.tau));
+    const row = (n, r, V, T) => `<tr><th>${n}</th><td>${fmt(r.rpm, 0)}</td><td>${fmt(r.T / 9.81, 2)}</td><td>${fmt(r.I, 1)}</td><td>${fmt(V, 1)}</td><td>${fmt(r.eff * 100, 1)} %</td><td>${fmt(r.Pcu + r.Pf, 0)} W</td><td>${T == null ? '—' : fmt(T, 0) + ' °C'}</td></tr>`;
+    ops = `<div style="overflow-x:auto"><table class="alloc"><tr><th></th><th>rpm</th><th>thrust kg</th><th>motor A</th><th>motor V</th><th>efficiency</th><th>losses</th><th>winding</th></tr>
+      ${row('Hover (most-loaded fan)', hv, hv.Vm, Th)}${row('Full throttle, this battery', fu, fu.Vm, Tb)}${row('Full throttle, freshly charged pack', fc, fc.Vm, null)}</table></div>
+      <p>Winding temperature: steady in hover with 40 °C air; full throttle is a 20 s burst starting from hover temperature (thermal time constant ${fmt(tF.tau, 0)} s).</p>`;
+    const k = (ok, mid) => (ok ? 'ok' : mid ? 'mid' : 'bad'), erpm = fc.rpm * D.p, os = fc.rpm * 1.15;
+    const rows = [
+      ['Fits the fan’s motor hub', 'Ø40 × 26.5 mm bell', 'hub Ø41 × 32 mm', 'ok', 'Same envelope as the 40 mm motors these fans are sold for.'],
+      ['Winding temperature, hover', `${fmt(Th, 0)} °C`, '≤ 110 °C', k(Th <= 110, Th <= 130), `${fmt(hv.Pcu, 0)} W copper + ${fmt(hv.Pf, 0)} W iron, eddy and bearing losses into the fan’s exhaust.`],
+      ['Winding temperature, 20 s full throttle', `${fmt(Tb, 0)} °C`, '≤ 150 °C (wire rated 200 °C)', k(Tb <= 150, Tb <= 180), 'Class-H wire and varnish; magnets are N45SH (rated to 150 °C).'],
+      ['Motor current, full throttle', `${fmt(fu.I, 0)} A`, `≤ 85 % of ${M.esc.A} A ESC`, k(fu.I <= .85 * M.esc.A, fu.I <= M.esc.A), 'Current through the ESC at full duty on the sagged pack.'],
+      ['Efficiency in hover', `${fmt(hv.eff * 100, 1)} %`, '≥ 85 %', k(hv.eff >= .85, hv.eff >= .8), 'Shaft power ÷ electrical input at the hover operating point.'],
+      ['ESC electrical speed', `${fmt(erpm / 1000, 0)}k erpm`, '≤ 300k (AM32 / BLHeli_32)', k(erpm <= 300e3, erpm <= 400e3), `${D.P / 2} pole pairs at ${fmt(fc.rpm, 0)} rpm on a freshly charged pack. Iron runs at ${fmt(fc.rpm * D.p / 60, 0)} Hz, which is why the laminations are 0.2 mm.`],
+      ['Bearing speed', `${fmt(os, 0)} rpm at 115 %`, '≤ 60,000 rpm (685 hybrid ceramic)', k(os <= 60000, os <= 70000), 'Ceramic balls run cooler and faster than steel; keep them lightly greased, not packed.'],
+      ['Rotor bell strength', `safety factor ${fmt(E.sf_bell, 1)}`, '≥ 2 on yield at 115 % speed', k(E.sf_bell >= 2, E.sf_bell >= 1.5), `Hoop stress from the spinning bell plus magnet pressure, at ${fmt(E.rpm_os, 0)} rpm (4140 pre-hardened, 650 MPa yield).`],
+      ['Magnet demagnetisation', `margin ${fmt(E.demag_margin, 1)}`, '≥ 1.5 at 150 % current, 120 °C', k(E.demag_margin >= 1.5, E.demag_margin >= 1.2), 'Armature field at burst current compared with N45SH coercivity when hot.'],
+      ['Flux densities', `gap ${fmt(D.Bg, 2)} T · tooth ${fmt(D.B_tooth, 2)} T · bell ${fmt(D.B_bell, 2)} T`, 'tooth ≤ 1.65, bell ≤ 1.65', 'ok', 'Held below saturation so Kv and torque stay linear.'],
+    ];
+    const pill = (s) => `<span class="pill ${s}">${s === 'ok' ? '● Pass' : s === 'mid' ? '▲ Marginal' : '■ Fail'}</span>`;
+    checks = `<div class="checks proto-table"><table class="checks-table"><thead><tr><th>Check</th><th>Value</th><th>Limit</th><th>Status</th><th>Why it matters</th></tr></thead><tbody>${rows.map(([n, v, l, s, w]) => `<tr><td>${esc(n)}</td><td class="num">${esc(v)}</td><td>${esc(l)}</td><td>${pill(s)}</td><td>${esc(w)}</td></tr>`).join('')}</tbody></table></div>`;
+    const pts = []; for (let i = 1; i <= 24; i++) { const r = motorOnFan(fu.T * i / 24, 1e9, c.kInst); pts.push(r); }
+    chart = `<div class="charts">${lineChart('Efficiency across the throttle range', 'JDM-M40 on the 90 mm fan', `Motor efficiency against the fan's thrust, up to full throttle on this battery (${fmt(fu.T / 9.81, 2)} kg). The dashed line is hover.`,
+      { x: [0, Math.ceil(fu.T / 9.81 * 2) / 2], y: [.6, 1], xl: 'thrust per fan, kg', yl: 'efficiency', vline: [hv.T / 9.81, 'hover'], series: [{ name: 'efficiency', c: 'var(--s1)', pts: pts.map((r) => [r.T / 9.81, r.eff]) }] })}
+      ${lineChart('Current and losses across the throttle range', 'torque balance with the fan load', 'Motor current rises with thrust^1.5. Losses are copper (grows with current²) plus iron, eddy and bearing losses (grow with speed).',
+      { x: [0, Math.ceil(fu.T / 9.81 * 2) / 2], y: [0, Math.ceil(fu.I / 20) * 20], xl: 'thrust per fan, kg', yl: 'A  or  W', vline: [hv.T / 9.81, 'hover'], series: [{ name: 'motor current, A', c: 'var(--s2)', pts: pts.map((r) => [r.T / 9.81, r.I]) }, { name: 'losses, W', c: 'var(--s3)', pts: pts.map((r) => [r.T / 9.81, r.Pcu + r.Pf]) }] })}</div>`;
+  }
+  const spec = [['Type', `outrunner, ${D.Ns} slots / ${D.P} poles, sensorless`], ['Kv', `${fmt(D.Kv, 0)} rpm/V`], ['Winding', `${D.N} turns Ø${fmt(D.d_wire * 1000, 2)} mm per tooth · ${D.conn}, ${D.paths} parallel paths`],
+    ['Resistance (line-line)', `${fmt(D.R * 1000, 1)} mΩ hot`], ['Bell', `Ø40.0 × ${fmt(D.L_bell * 1000 + 1.5, 1)} mm, 4140 steel, ${fmt(D.t_bell * 1000, 1)} mm wall`], ['Stator', `Ø${fmt(D.r_s * 2000, 1)} × ${fmt(D.L * 1000, 0)} mm, 0.2 mm NO20, ${fmt(D.wt * 1000, 2)} mm teeth`],
+    ['Magnets', `${D.P} × N45SH arcs, ${fmt(D.hm * 1000, 1)} mm thick, air gap ${fmt(D.g * 1000, 1)} mm`], ['Shaft / bearings', 'Ø5 mm, M5 front thread · 2 × 685 hybrid ceramic'], ['Mass', `${fmt(cadM * 1000, 0)} g (CAD), ${fmt(D.m * 1000, 0)} g (sizing estimate)`]];
+  return `<article class="chart-card motor-card"><span class="ref">cad/source/motor_design.py · ${fmt(MT.sweep.tried / 1e6, 1)} million candidate designs, ${MT.sweep.passed} passed every limit, the lightest kept</span>
+    <h4>Custom fan motor: JDM-M40</h4>
+    <p>A 40 mm outrunner you build yourself, sized for this fan on this battery rather than bought off the shelf. The sizing script swept slot / pole combinations, stack length, magnet thickness, tooth width, turns and connection. For each candidate it worked out the magnetic circuit, copper, losses, temperature, rotor stress and demagnetisation, and matched it to the fan's torque curve. Unbalanced 9-slot combinations were excluded because their sideways magnetic pull shakes the rotor at 35,000 rpm.${M.custom ? '' : ' <b>Select the JDM-M40 under Fan motor to see its numbers on your configuration.</b>'}</p>
+    <div class="motor-grid"><div><table class="alloc spec">${spec.map(([k, v]) => `<tr><th>${k}</th><td>${esc(v)}</td></tr>`).join('')}</table></div>
+      <div class="motor-wind">${windingSvg(D)}<p>Coil order around the stator: ${D.pattern.split('').map((ch) => ch === ch.toUpperCase() ? ch : ch.toUpperCase() + '′').join(' ')} (′ = connected reversed). Phase A: teeth ${teeth.A.join(', ')} · B: ${teeth.B.join(', ')} · C: ${teeth.C.join(', ')}; each phase's four coils in parallel, phases in delta.</p></div></div>
+    ${ops}${checks}${chart}
+    <h4>Build one motor</h4><ol class="motor-steps">${MOTOR_STEPS.map(([t, d]) => `<li><b>${esc(t)}.</b> ${esc(d.replace('__KV__', fmt(D.Kv, 0)))}</li>`).join('')}</ol>
+    <p>You need a small lathe (or a machine shop for the bell and hub, about $25 each), a soldering iron, a multimeter, a drill for the Kv test and a magnetic prop balancer. The STEP files for the stator outline, bell, hub and shaft are in <a href="${REPO}cad/mini/step/" target="_blank" rel="noopener">cad/mini/step</a>.</p></article>`;
+}
 function wiringSvg(c, M) {
   const box = (x, y, w, h, t, s, cl = '') => `<g class="wb ${cl}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3"/><text x="${x + w / 2}" y="${y + h / 2 - (s ? 3 : -4)}" text-anchor="middle" class="ttl">${t}</text>${s ? `<text x="${x + w / 2}" y="${y + h / 2 + 11}" text-anchor="middle">${s}</text>` : ''}</g>`;
   const ln = (d, cl) => `<path d="${d}" class="${cl}" fill="none"/>`;
@@ -1891,4 +2020,4 @@ function wiringSvg(c, M) {
 const deep = location.hash.replace('#', '');
 const startTab = MY_TABS[deep] ? deep : MY_TABS[document.body.dataset.startTab] ? document.body.dataset.startTab : null;
 if (startTab) document.querySelector(`[data-tab="${startTab}"]`)?.click();
-window.__jd = { _dbg: { OBJS, PARTS, NODE }, focus: (v, id) => focusRegion(v, id), unfocus: () => exitFocus(true), seek: (t) => { seq.playing = false; seq.snap = true; syncPlay(); setSeqTime(t); }, style: (s) => document.querySelector(`[data-seqstyle="${s}"]`).click(), showTab, get DATA() { return DATA; }, MASS, flightModel: () => flightModel(FLIGHT), MINI, protoModel: () => protoModel(MINI.cfg), protoChecks: () => protoChecks(MINI.cfg, protoModel(MINI.cfg)), setStep: (i) => setStep(i) };
+window.__jd = { _dbg: { OBJS, PARTS, NODE }, focus: (v, id) => focusRegion(v, id), unfocus: () => exitFocus(true), seek: (t) => { seq.playing = false; seq.snap = true; syncPlay(); setSeqTime(t); }, style: (s) => document.querySelector(`[data-seqstyle="${s}"]`).click(), showTab, get DATA() { return DATA; }, MASS, flightModel: () => flightModel(FLIGHT), MINI, protoModel: () => protoModel(MINI.cfg), protoChecks: () => protoChecks(MINI.cfg, protoModel(MINI.cfg)), setStep: (i) => setStep(i), camTo: (t) => { const v = views.prototype; v.controls.target.copy(t); v.camera.position.set(t.x + .09, t.y + .05, t.z + .16); } };

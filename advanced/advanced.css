@@ -270,3 +270,16 @@ input[type=range] { accent-color: var(--accent); }
   .proto-steps { max-height: none; }
   .proto-step-list { max-height: 220px; }
 }
+.motor-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: var(--space-5); align-items: start; }
+.motor-grid .spec th { text-align: left; white-space: nowrap; }
+.motor-grid .spec td { text-align: left; }
+.motor-card .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--space-4); }
+.motor-card .charts .chart-card { background: #08151e; }
+.motor-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: var(--text-xs); color: var(--muted); line-height: 1.55; }
+.motor-steps b { color: var(--text); font-weight: 500; }
+.winding { width: 100%; max-width: 300px; height: auto; display: block; margin: 0 auto; }
+.winding text { fill: var(--muted); font: 10px var(--font-mono); }
+.winding text.ttl { fill: #06121a; font-weight: 600; }
+.winding .mn { fill: #c8303f; opacity: .8; } .winding .ms { fill: #3a6ea8; opacity: .8; }
+.winding .hub { fill: #0b1d27; stroke: #6be1ed55; }
+@media (max-width: 960px) { .motor-grid { grid-template-columns: 1fr; } }

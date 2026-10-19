@@ -76,15 +76,41 @@ shaft in two 608 bearings, driven by a 35 kg·cm servo, on a printed mast bolted
 chassis plate. An ArduPilot flight controller, four 100 A ESCs and two 6S 5000 mAh packs in
 parallel complete it.
 
-* Default build: 5.6 kg, thrust-to-weight 1.70, about 3.8 min of hover, about $1,260 in parts plus
-  a radio and charger if you don't own them. 13 of 15 checks pass. Two are marginal:
-  thrust-to-weight (below the usual 2 : 1) and voltage sag at full throttle (3.23 V per cell).
-  A single pack fails the sag check, which is why the build uses two.
+* Default build (with the custom motors below): 5.3 kg, thrust-to-weight 1.80, about 4.4 min of
+  hover, about $1,450 in parts plus a radio and charger if you don't own them. 14 of 16 checks
+  pass. Two are marginal: thrust-to-weight (below the usual 2 : 1) and voltage sag at full throttle
+  (3.27 V per cell). A single pack fails the sag check, which is why the build uses two. With the
+  fans' stock motors instead: 5.6 kg, 1.70 : 1, 3.8 min, and a throttle cap is needed so a freshly
+  charged pack can't overdrive the ESCs.
 * Yaw comes from tilting the front and rear pods opposite ways by ±5°, because the fans' stator
   vanes cancel most of the rotor torque.
 * It tests the conversion mechanism, clearances, CG, hover control and the arming interlock. It
   doesn't test road driving (the tyre rings are fixed to the ducts), the variable-pitch proprotor,
   or full-size dynamics.
+
+### JDM-M40 custom fan motor
+
+`cad/source/motor_design.py` sizes a brushless outrunner you build yourself, to fit the 90 mm fan's
+motor hub (bell Ø40 mm). It sweeps 2.3 million candidates: slot / pole combination, stack length,
+magnet thickness, tooth width, turns, star or delta, and parallel paths. For each one it works out:
+
+* the magnetic circuit: air-gap, tooth, yoke and bell flux density
+* the copper and phase resistance
+* losses: copper, iron at the electrical frequency, eddy, bearing and windage
+* the winding temperature in the fan's exhaust
+* rotor bell stress at 115 % speed, and magnet demagnetisation margin
+
+It matches each candidate to the fan's torque curve and keeps the lightest one that passes every
+limit; 182 pass. Unbalanced 9-slot combinations are excluded because of their sideways magnetic
+pull. It writes `advanced/data/mini/motor.json`, which `build_mini.py` uses for the motor CAD
+(JDM-501 to 507) and tab 08 uses for its live operating points.
+
+Result: 12 slots / 10 poles, delta, 10 turns of Ø0.46 mm per tooth (coil order AabBCcaABbcC),
+Kv 1,829, 15.8 mΩ line-line. 0.2 mm NO20 laminations, 10 N45SH magnets 1.8 mm thick, a turned
+4140 bell, two 685 hybrid ceramic bearings. About 193 g; about 90 % efficient in hover and at
+full throttle. The winding runs about 82 °C in hover and reaches about 98 °C after 20 s at full
+throttle. A fan with this motor is about 75 g lighter than the same fan with its stock motor, and the Kv is matched to the sagged pack,
+so it gives more thrust there.
 
 Prices in the workbench are typical hobby-shop figures, and fan, ESC and servo figures are typical
 catalogue values. Check them against the parts you actually buy.

@@ -8,7 +8,7 @@ off-the-shelf hobby parts: fixed-pitch EDFs instead of variable-pitch proprotors
 hinges, fixed landing legs, and an ArduPilot flight controller. The wheel pods are about 2.5× deeper than scale so
 the EDF fits inside; that is the main geometric compromise.
 """
-import math, os, sys
+import json, math, os, sys
 import cadquery as cq
 from cadquery import Vector as V
 import jdcad
@@ -133,6 +133,62 @@ def fc_plate():
             p = p.cut(cyl(0.0016, 0.01, 'y', (x, 0, z)))
     return p
 
+# --------------------------------------------------------------- JDM-M40 custom fan motor (sized by motor_design.py)
+MOTOR = json.load(open(os.path.join(OUT_WEB, 'motor.json')))['design']
+MOTOR_Z = -0.012          # motor centre on the fan axis, behind the rotor, inside the stator-vane hub
+MATERIALS.update({
+    'st4140': dict(name='4140 steel, pre-hardened 28–32 HRC (rotor bell / back iron)', rho=7850, color='#7a828b', look='metal'),
+    'magwire': dict(name='Class-H magnet wire, Ø0.46 mm, varnished (with slot fill)', rho=3600, color='#c87f4f', look='copper'),
+})
+
+def stator():
+    M = MOTOR; L = M['L']; bore = 0.0072
+    s_ = union(tube(M['r_yo'], bore, L, 'z'),
+               *[rot(box(M['depth'] + 0.0004, M['wt'], L, ((M['r_yo'] + M['r_s'] - M['tip']) / 2, 0, 0)), 'z', 360 / M['Ns'] * k) for k in range(M['Ns'])],
+               tube(M['r_s'], M['r_s'] - M['tip'], L, 'z'))
+    for k in range(M['Ns']):     # slot openings between the tooth tips
+        s_ = s_.cut(rot(box(M['tip'] * 3, M['slot_open'], L * 1.2, (M['r_s'] - M['tip'] / 2, 0, 0)), 'z', 360 / M['Ns'] * (k + 0.5)))
+    return s_
+
+def tooth_coil():
+    """One concentrated coil, drawn as the copper envelope around a tooth (10 turns, axis radial)."""
+    M = MOTOR; L = M['L']
+    r0, r1 = M['r_yo'] + 0.0003, M['r_s'] - M['tip'] - 0.0003
+    r_mid = (r0 + r1) / 2
+    c = max(0.0006, (2 * math.pi * r0 / M['Ns'] - M['wt']) / 2 - 0.0003)   # coil build limited by the slot width at the root
+    outer = box(r1 - r0, M['wt'] + 2 * c, L + 2 * c, (r_mid, 0, 0))
+    return outer.cut(box(r1 - r0 + 0.002, M['wt'] + 0.0002, L + 0.0002, (r_mid, 0, 0)))
+
+def magnet_arc():
+    M = MOTOR; L = M['L']; ang = 360 / M['P'] * M['alpha_p']
+    ring = tube(M['r_mag_i'] + M['hm'], M['r_mag_i'], L, 'z')
+    a = math.radians(ang / 2); R = 0.03
+    wedge = extrude_xy([(0, 0), (R * math.cos(a), -R * math.sin(a)), (R, 0), (R * math.cos(a), R * math.sin(a))], L * 1.2, -L * 0.6)
+    return ring.intersect(wedge)
+
+def rotor_bell():
+    M = MOTOR; Lb = M['L_bell']; ro = M['r_out']; ri = ro - M['t_bell']
+    b = tube(ro, ri, Lb, 'z', (0, 0, 0))
+    face = cyl(ro, 0.0015, 'z', (0, 0, Lb / 2 + 0.00075))
+    for k in range(6):          # cooling vents in the front face
+        face = face.cut(rot(cyl(0.0042, 0.004, 'z', (0.0115, 0, Lb / 2 + 0.00075)), 'z', 60 * k))
+    boss = tube(0.0055, 0.0025, 0.006, 'z', (0, 0, Lb / 2 - 0.0015))
+    return union(b, face, boss)
+
+def motor_shaft():
+    return cyl(0.0025, 0.046, 'z', (0, 0, 0.004))
+
+def stator_hub():
+    M = MOTOR; L = M['L']
+    t = tube(0.0072, 0.0055, L + 0.006, 'z', (0, 0, -0.003))
+    fl = tube(0.016, 0.0055, 0.003, 'z', (0, 0, -L / 2 - 0.0075))
+    for k in range(4):          # 4 × M3 on a 25 mm circle (drill to suit your fan's motor mount)
+        fl = fl.cut(rot(cyl(0.0016, 0.01, 'z', (0.0125, 0, -L / 2 - 0.0075)), 'z', 45 + 90 * k))
+    return union(t, fl)
+
+def bearing_685():
+    return tube(0.0055, 0.0025, 0.005, 'z')
+
 def build():
     node('mini', 'Miniature prototype', None, system='M00')
     node('m_body', 'Body shell', 'mini', system='M10')
@@ -172,8 +228,10 @@ def build():
          process='FDM print', fn='Connects the hinge shaft to the pod; swings the pod 90° up and outboard')
     # purchased components
     comp = [
-        ('JDM-401', '90 mm 12-blade EDF unit, 6S (e.g. FMS / Freewing class)', lambda: union(tube(EDF_OD / 2, EDF_OD / 2 - 0.002, EDF_LEN, 'z'), cyl(0.018, 0.040, 'z'),
-            *[rot(box(0.036, 0.003, 0.012, (0.03, 0, 0.01)), 'z', 30 * k) for k in range(12)]), 0.420),
+        ('JDM-401', '90 mm 12-blade EDF fan unit: housing, stator vanes and rotor (no motor)', lambda: union(
+            tube(EDF_OD / 2, EDF_OD / 2 - 0.002, EDF_LEN, 'z'), tube(0.0215, 0.0205, 0.032, 'z', (0, 0, -0.012)), tube(0.0215, 0.006, 0.010, 'z', (0, 0, 0.016)),
+            *[rot(box(0.026, 0.003, 0.010, (0.034, 0, 0.016)), 'z', 30 * k) for k in range(12)],
+            *[rot(box(0.026, 0.0015, 0.020, (0.034, 0, -0.016)), 'z', 360 / 7 * k + 8) for k in range(7)]), 0.150),
         ('JDM-402', '100 A ESC (BLHeli_32, 6S)', lambda: box(0.060, 0.012, 0.030), 0.095),
         ('JDM-403', '6S 5000 mAh LiPo, 75C (two in parallel)', lambda: box(0.155, 0.040, 0.048), 0.790),
         ('JDM-404', 'Flight controller (ArduPilot H7, 30.5 mm)', lambda: box(0.036, 0.008, 0.036), 0.012),
@@ -185,6 +243,20 @@ def build():
         ('JDM-410', '608 ball bearing (8 × 22 × 7)', lambda: tube(0.011, 0.004, 0.007, 'x'), 0.012),
         ('JDM-411', 'Hinge shaft, 8 mm steel, 44 mm', lambda: cyl(0.004, 0.044, 'x'), 0.017),
     ]
+    sysM = 'M50 Custom fan motor (JDM-M40)'
+    M = MOTOR
+    part('JDM-501', f'Stator lamination stack, {M["Ns"]} teeth', sysM, 'Motor', 'sisteel', stator, process='Laser-cut 0.2 mm NO20 laminations, bonded',
+         spec=dict(laminations=round(M['L'] / 0.0002), od_mm=round(M['r_s'] * 2000, 2), id_mm=14.4, stack_mm=round(M['L'] * 1000, 1), tooth_mm=round(M['wt'] * 1000, 2)),
+         fn='Carries the winding; teeth sized for 1.65 T at full flux')
+    part('JDM-502', f'Tooth coil, {M["N"]} turns Ø{M["d_wire"] * 1000:.2f} mm', sysM, 'Motor', 'magwire', tooth_coil, mass=MOTOR['m_cu'] / MOTOR['Ns'] * 1.08, process='Hand-wound on the tooth, varnished',
+         spec=dict(turns=M['N'], wire_mm=round(M['d_wire'] * 1000, 2), connection=f'{M["conn"]}, {M["paths"]} parallel paths'), fn='Concentrated coil; 12 per motor')
+    part('JDM-503', 'Magnet arc, N45SH, radially magnetised', sysM, 'Motor', 'ndfeb', magnet_arc, supplier='buy', process='Purchased (custom arc), bonded in the bell',
+         spec=dict(thickness_mm=M['hm'] * 1000, length_mm=M['L'] * 1000, arc_deg=round(360 / M['P'] * M['alpha_p'], 1)), fn='Alternate N / S facing inward')
+    part('JDM-504', 'Rotor bell / back iron', sysM, 'Motor', 'st4140', rotor_bell, process='Turned from 4140 tube, vents drilled',
+         spec=dict(od_mm=40.0, wall_mm=M['t_bell'] * 1000, length_mm=round(M['L_bell'] * 1000, 1)), fn='Returns the magnet flux and spins the fan through the shaft')
+    part('JDM-505', 'Motor shaft, Ø5 mm hardened steel, M5 front thread', sysM, 'Motor', 'steel_stn', motor_shaft, process='Ground rod, threaded and flatted')
+    part('JDM-506', '685 hybrid ceramic bearing (5 × 11 × 5)', sysM, 'Motor', 'bearing', bearing_685, supplier='buy', process='Purchased')
+    part('JDM-507', 'Stator hub and motor mount', sysM, 'Motor', 'al6061', stator_hub, process='Turned 6061-T6', fn='Holds both bearings; flange bolts into the fan’s motor mount')
     for pn, name, fb, m in comp:
         part(pn, name, sysB, 'Electronics' if pn in ('JDM-402', 'JDM-404', 'JDM-405', 'JDM-406', 'JDM-408', 'JDM-409') else 'Propulsion' if pn in ('JDM-401', 'JDM-403') else 'Pods',
              'electronic', fb, mass=m, supplier='buy', process='Purchased hobby component')
@@ -208,10 +280,19 @@ def build():
         place('JDM-208', yk)
         pod = node(f'mp_{c}', f'Pod {c}', yk, pos=(0, -HINGE[1], -HINGE[2]), system='M30')
         place('JDM-206', pod); place('JDM-207', pod); place('JDM-401', pod)
+        place('JDM-501', pod, (0, 0, MOTOR_Z)); place('JDM-507', pod, (0, 0, MOTOR_Z)); place('JDM-505', pod, (0, 0, MOTOR_Z))
+        place('JDM-504', pod, (0, 0, MOTOR_Z + (MOTOR['L_bell'] - MOTOR['L']) / 2 - 0.0015))
+        for zb in (-MOTOR['L'] / 2 - 0.0015, MOTOR['L'] / 2 + 0.0015):
+            place('JDM-506', pod, (0, 0, MOTOR_Z + zb))
+        for k in range(MOTOR['Ns']):
+            place('JDM-502', pod, (0, 0, MOTOR_Z), q_axis((0, 0, 1), 360 / MOTOR['Ns'] * k))
+        for k in range(MOTOR['P']):
+            place('JDM-503', pod, (0, 0, MOTOR_Z), q_axis((0, 0, 1), 360 / MOTOR['P'] * (k + 0.5)))
 
 META = dict(title='Joukowsky Dynamics miniature prototype', scale=S, edf_od=EDF_OD, edf_len=EDF_LEN, tire_R=TIRE_R, hinge=HINGE,
             wheelbase=2 * WB, track=2 * TRACK, chassis_y=CHASSIS_Y,
-            status='Buildable concept. Printed-part masses are from CAD volumes at the stated effective densities.')
+            status='Buildable concept. Printed-part masses are from CAD volumes at the stated effective densities.',
+            motor=json.load(open(os.path.join(OUT_WEB, 'motor.json'))))
 
 if __name__ == '__main__':
     import build_rev08 as B
