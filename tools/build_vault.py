@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives import hashes
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ITER = 310_000
 FILES = ['index.html', 'base.css', 'style.css', 'revision.css', 'design.css', 'advanced/advanced.css',
-         'app.js', 'advanced/advanced.js', 'advanced/data/parts.json', 'advanced/data/meshes.bin']
+         'app.js', 'advanced/advanced.js', 'advanced/data/parts.json', 'advanced/data/meshes.bin', 'advanced/data/mini/parts.json', 'advanced/data/mini/meshes.bin']
 
 def site_tweaks(name, data):
     """Add a link back to the Engineering Projects page on the personal site."""

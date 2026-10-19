@@ -279,7 +279,8 @@ def tessellate(shape, tol, ang=0.35):
     remap = {o: n for n, o in enumerate(used)}
     return [verts[i] for i in used], [(remap[a], remap[b], remap[c]) for a, b, c in idx]
 
-def export(out_web, out_cad, meta, step_assembly=True, only=None, log=print):
+def export(out_web, out_cad, meta, step_assembly=True, only=None, log=print,
+           bom_name='Joukowsky-Dynamics-Rev08-BOM.csv', asm_name='Joukowsky-Dynamics-Rev08-road-configuration-assembly.step'):
     os.makedirs(out_web, exist_ok=True)
     os.makedirs(os.path.join(out_cad, 'step'), exist_ok=True)
     if not only:
@@ -427,7 +428,7 @@ def export(out_web, out_cad, meta, step_assembly=True, only=None, log=print):
         json.dump(catalog, f, separators=(',', ':'))
 
     # BOM
-    with open(os.path.join(out_cad, 'Joukowsky-Dynamics-Rev08-BOM.csv'), 'w', newline='') as f:
+    with open(os.path.join(out_cad, bom_name), 'w', newline='') as f:
         w = csv.writer(f)
         w.writerow(['part_number', 'name', 'system', 'assembly', 'qty', 'material', 'process', 'make_buy',
                     'unit_mass_kg', 'total_mass_kg', 'envelope_mm', 'step_file', 'lh_step_file', 'function'])
@@ -439,7 +440,7 @@ def export(out_web, out_cad, meta, step_assembly=True, only=None, log=print):
 
     if step_assembly:
         import zipfile
-        name = 'Joukowsky-Dynamics-Rev08-road-configuration-assembly.step'
+        name = asm_name
         tmp = os.path.join(out_cad, name)
         _export_assembly(built, nids, tmp, log)
         with zipfile.ZipFile(tmp + '.zip', 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:

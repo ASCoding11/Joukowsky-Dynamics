@@ -1,0 +1,25 @@
+part_number,name,system,assembly,qty,material,process,make_buy,unit_mass_kg,total_mass_kg,envelope_mm,step_file,lh_step_file,function
+JDM-101,"Body shell, front section",M10 Body,Shell,1,"Lightweight foaming PLA, 1.9 mm walls","FDM print, sand + paint",make,0.071,0.071,171.9x70.7x182.0,step/JDM-101.step,,"Scaled A1 body, front third (nose to front pods)"
+JDM-102,"Body shell, middle section",M10 Body,Shell,1,"Lightweight foaming PLA, 1.9 mm walls",FDM print,make,0.0906,0.091,190.0x77.6x190.7,step/JDM-102.step,,Cockpit section with canopy opening
+JDM-103,"Body shell, rear section",M10 Body,Shell,1,"Lightweight foaming PLA, 1.9 mm walls",FDM print,make,0.0794,0.079,173.9x84.2x190.4,step/JDM-103.step,,Rear third with diffuser
+JDM-104,Canopy,M10 Body,Shell,1,"Clear PETG, 0.8 mm vase-mode",Print or vacuum-form,make,0.0324,0.032,259.1x56.4x129.1,step/JDM-104.step,,
+JDM-201,Chassis plate,M20 Printed / cut parts,Frame,1,2 mm carbon-fibre plate (CNC cut),CNC-routed carbon plate,make,0.1063,0.106,400.0x2.0x112.0,step/JDM-201.step,,"Backbone: carries hinges, legs, electronics and battery"
+JDM-202,Landing leg,M20 Printed / cut parts,Frame,4,"PETG, 40 % gyroid infill (effective density)",FDM print,make,0.0022,0.009,18.0x28.0x18.0,step/JDM-202.step,,
+JDM-203,Battery tray,M20 Printed / cut parts,Frame,1,"PETG, 40 % gyroid infill (effective density)","FDM print, velcro straps",make,0.0261,0.026,170.0x11.5x66.0,step/JDM-203.step,,
+JDM-204,Flight-controller plate (30.5 mm pattern),M20 Printed / cut parts,Frame,1,"PETG, 40 % gyroid infill (effective density)",FDM print,make,0.0069,0.007,60.0x3.0x60.0,step/JDM-204.step,,
+JDM-205,Hinge block,M20 Printed / cut parts,Pods,4,"PETG, 40 % gyroid infill (effective density)","FDM print, press-fit 2 × 608 bearings",make,0.0145,0.058,40.0x30.0x26.0,step/JDM-205.step,,
+JDM-209,Hinge mast,M20 Printed / cut parts,Pods,4,"PETG, 40 % gyroid infill (effective density)","FDM print, 2 × M3 to the chassis plate",make,0.0129,0.052,30.0x90.3x38.5,step/JDM-209.step,,Ties the hinge block to the chassis plate; the body shell carries no load
+JDM-206,Pod duct ring (holds the EDF),M20 Printed / cut parts,Pods,4,"PETG, 40 % gyroid infill (effective density)",FDM print,make,0.0994,0.398,122.3x132.3x79.0,step/JDM-206.step,,Clamps the EDF casing; bell-mouth inlet lip; servo-arm boss
+JDM-207,Tyre ring,M20 Printed / cut parts,Pods,4,"TPU 95A, 60 % infill","FDM print, stretch over the duct ring",make,0.0659,0.264,135.5x135.5x64.8,step/JDM-207.step,,
+JDM-208,Pod swing arm,M20 Printed / cut parts,Pods,4,"PETG, 40 % gyroid infill (effective density)",FDM print,make,0.0078,0.031,24.0x31.0x27.0,step/JDM-208.step,step/JDM-208-LH.step,Connects the hinge shaft to the pod; swings the pod 90° up and outboard
+JDM-401,"90 mm 12-blade EDF unit, 6S (e.g. FMS / Freewing class)",M40 Purchased components,Propulsion,4,"Electronic unit (Al housing, potted)",Purchased hobby component,buy,0.42,1.68,98.0x98.0x75.0,step/JDM-401.step,,
+JDM-402,"100 A ESC (BLHeli_32, 6S)",M40 Purchased components,Electronics,4,"Electronic unit (Al housing, potted)",Purchased hobby component,buy,0.095,0.38,60.0x12.0x30.0,step/JDM-402.step,,
+JDM-403,"6S 5000 mAh LiPo, 75C (two in parallel)",M40 Purchased components,Propulsion,2,"Electronic unit (Al housing, potted)",Purchased hobby component,buy,0.79,1.58,155.0x40.0x48.0,step/JDM-403.step,,
+JDM-404,"Flight controller (ArduPilot H7, 30.5 mm)",M40 Purchased components,Electronics,1,"Electronic unit (Al housing, potted)",Purchased hobby component,buy,0.012,0.012,36.0x8.0x36.0,step/JDM-404.step,,
+JDM-405,GNSS + compass module,M40 Purchased components,Electronics,1,"Electronic unit (Al housing, potted)",Purchased hobby component,buy,0.025,0.025,28.0x8.0x28.0,step/JDM-405.step,,
+JDM-406,ExpressLRS receiver,M40 Purchased components,Electronics,1,"Electronic unit (Al housing, potted)",Purchased hobby component,buy,0.004,0.004,20.0x4.0x12.0,step/JDM-406.step,,
+JDM-407,"High-torque digital servo (35 kg·cm at 7.4 V, metal gear)",M40 Purchased components,Pods,4,"Electronic unit (Al housing, potted)",Purchased hobby component,buy,0.07,0.28,40.0x44.0x20.0,step/JDM-407.step,,
+JDM-408,"Power distribution board (XT90, 4 × ESC pads)",M40 Purchased components,Electronics,1,"Electronic unit (Al housing, potted)",Purchased hobby component,buy,0.03,0.03,50.0x4.0x50.0,step/JDM-408.step,,
+JDM-409,"Servo BEC, 7.4 V 8 A",M40 Purchased components,Electronics,1,"Electronic unit (Al housing, potted)",Purchased hobby component,buy,0.02,0.02,40.0x10.0x20.0,step/JDM-409.step,,
+JDM-410,608 ball bearing (8 × 22 × 7),M40 Purchased components,Pods,8,"Electronic unit (Al housing, potted)",Purchased hobby component,buy,0.012,0.096,7.0x22.0x22.0,step/JDM-410.step,,
+JDM-411,"Hinge shaft, 8 mm steel, 44 mm",M40 Purchased components,Pods,4,"Electronic unit (Al housing, potted)",Purchased hobby component,buy,0.017,0.068,44.0x8.0x8.0,step/JDM-411.step,,

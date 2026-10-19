@@ -21,7 +21,7 @@ const fmt = (v, d = 1) => Number.isFinite(v) ? v.toLocaleString('en-US', { minim
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ------------------------------------------------------------------ tabs (works alongside app.js)
-const MY_TABS = { sequence: 'sequence-panel', advanced: 'advanced-panel', flight: 'flight-panel' };
+const MY_TABS = { sequence: 'sequence-panel', advanced: 'advanced-panel', flight: 'flight-panel', prototype: 'prototype-panel' };
 let activeTab = 'model';
 document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
 function showTab(tab) {
@@ -108,6 +108,11 @@ function makeView(name, containerId, camPos, target) {
 let current = null;
 function activate(tab) {
   if (FOCUS.region && FOCUS.view !== tab) exitFocus(true);
+  if (tab === 'prototype') {
+    current = null;
+    bootMini().then(() => { if (activeTab !== 'prototype') return; current = 'prototype'; views.prototype.el.appendChild(renderer.domElement); resize(); });
+    return;
+  }
   const v = views[tab === 'flight' ? null : tab];
   if (tab === 'flight') { current = null; renderFlight(); return; }
   if (!v) return;
@@ -141,6 +146,7 @@ function loop() {
   if (!current || document.hidden) return;
   const v = views[current];
   if (current === 'sequence') tickSequence(dt);
+  if (current === 'prototype') { tickProto(dt); v.controls.update(); renderer.render(MINI.scene, v.camera); return; }
   tickFocus(dt, current);
   v.controls.update();
   const t = performance.now() / 1000;
@@ -244,12 +250,12 @@ const PARTS = [];         // { def, geo, edges, idx }
 const OBJS = [];          // render records { obj, line, pi, ni, instIdx:[global instance ids], sys }
 const INST_TO_OBJ = [];   // global instance -> [rec, localIndex]
 const animNodes = [];
-function decode(p) {
+function decode(p, buf = BUF) {
   const m = p.mesh;
-  const q = new Int16Array(BUF, m.voff, m.nv * 3);
+  const q = new Int16Array(buf, m.voff, m.nv * 3);
   const pos = new Float32Array(m.nv * 3);
   for (let i = 0; i < pos.length; i++) { const k = i % 3; pos[i] = (q[i] + 32767) / 65534 * m.ext[k] + m.min[k]; }
-  const idx = m.wide ? new Uint32Array(BUF.slice(m.ioff, m.ioff + m.ni * 4)) : new Uint16Array(BUF.slice(m.ioff, m.ioff + m.ni * 2));
+  const idx = m.wide ? new Uint32Array(buf.slice(m.ioff, m.ioff + m.ni * 4)) : new Uint16Array(buf.slice(m.ioff, m.ioff + m.ni * 2));
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
@@ -427,7 +433,7 @@ const STEPS = [
     text: 'The scan front sweeps nose-ward and reveals 242 unique CADed parts in their exploded positions.' },
   { t: 6, code: 'ASSEMBLE', title: 'Assembly', sub: 'Systems dock into the safety cell', hot: ['200', '300', '110'], cam: [[9.5, 5, 9.5], [0, .5, 0]],
     text: 'Battery, legs, fan-wheel corners, cockpit, avionics, thermal, parachute bay and body panels lock onto the carbon tub.',
-    callouts: [['bmod_07', [0, .1, 0], 'ENERGY STORAGE', '19 modules · 1,064 × 4680 cells', -110, 70], ['mod_FL', [0, .5, .2], 'FAN-WHEEL MODULE ×4', 'tyre + duct + 7-blade proprotor', 120, -70],
+    callouts: [['bmod_07', [0, .1, 0], 'ENERGY STORAGE', '19 modules · 5,472 × 21700 cells', -110, 70], ['mod_FL', [0, .5, .2], 'FAN-WHEEL MODULE ×4', 'tyre + duct + 7-blade proprotor', 120, -70],
       ['body', [0, 1.3, 0], 'BODY-IN-WHITE', 'lofted from the A1 surfaces', -140, -60]] },
   { t: 14, code: 'ROAD', title: 'Road mode', sub: '60 km/h · fan hardware stowed and locked', hot: [], cam: [[7.2, 1.4, 5.6], [0, .4, 0]],
     text: 'The airless tyre rolls on the duct rim. Blades sit feathered at 90° and the dog clutch couples them to the rim, so the motor drives the wheel. Petal covers are closed.',
@@ -442,12 +448,12 @@ const STEPS = [
   { t: 31, code: 'CONVERT', title: 'Wheel → proprotor', sub: 'Yokes swing each wheel 90° up and out', hot: ['340', '300'], cam: [[6.2, 3.6, 7.6], [0, 1, 0]],
     text: 'A harmonic-drive rotary actuator on each hinge swings the module up and outboard. The fender cap rides on the yoke. Redundant RVDTs and locks must agree before arming.',
     callouts: [['yoke_FL', [0, 0, 0], 'CONVERSION HINGE', '2.4 kN·m harmonic drive · dual RVDT', -150, -60], ['yoke_RL', [0, 0, 0], 'FENDER CAP', 'lifts away with the yoke', 120, -80]] },
-  { t: 37, code: 'SPIN-UP', title: 'Spin-up', sub: '4 × 230 kW axial-flux motors', hot: ['320', '330'], cam: [[5.2, 6.2, 6.4], [0, 1, 0]],
+  { t: 37, code: 'SPIN-UP', title: 'Spin-up', sub: '4 × 320 kW axial-flux motors', hot: ['320', '330'], cam: [[5.2, 6.2, 6.4], [0, 1, 0]],
     text: 'Rotors spin up to hover RPM. Diagonal pairs counter-rotate for yaw balance; the stators remove swirl.',
-    callouts: [['mod_FR', [0, 0, .3], 'CCW / CW DIAGONAL PAIRS', 'yaw from differential torque', -150, -70], ['mod_RL', [0, 0, .3], 'DUCTED PROPROTOR', 'R 540 mm · σ 0.40 · B 7', 130, -60]] },
+    callouts: [['mod_FR', [0, 0, .3], 'CCW / CW DIAGONAL PAIRS', 'yaw from differential torque', -150, -70], ['mod_RL', [0, 0, .3], 'DUCTED PROPROTOR', 'R 585 mm · σ 0.36 · B 7', 130, -60]] },
   { t: 41, code: 'LIFT-OFF', title: 'Lift-off & hover', sub: 'Legs retract after weight-off', hot: ['330'], cam: [[8.4, 3.2, 8.4], [0, 2.4, 0]],
     text: 'Thrust balances weight, the car climbs and the legs retract once weight-on-wheels clears.',
-    callouts: [['mod_FL', [0, 0, 0], 'HOVER', 'disk loading ≈ 134 lb/ft²', 130, -60]] },
+    callouts: [['mod_FL', [0, 0, 0], 'HOVER', 'disk loading ≈ 107 lb/ft²', 130, -60]] },
   { t: 47, code: 'TRANSITION', title: 'Partial conversion', sub: 'Modules tilt 25° forward', hot: ['340'], cam: [[-6.5, 4.2, 8.6], [0, 3.6, 0]],
     text: 'Gimbals tilt each rotor axis forward. Thrust vectors carry weight and drag; the body adds a little lift.',
     callouts: [['tilt_FL', [0, 0, 0], 'CRUISE TILT GIMBAL', '0–30° forward', 130, -60]] },
@@ -806,21 +812,25 @@ function renderMass() {
 
 // ------------------------------------------------------------------ 07 PROPROTOR & FLIGHT DYNAMICS
 const RHO = 1.225, G0 = 9.80665;
+// Component limits used by the physics checks (from the CAD part specs)
+const CELL = { V: 3.6, Ah: 5.0, Wh: 18.0, Acont: 60, Apeak: 100, R: 0.010 };      // high-power 21700 cell
+const MOTOR = { peakKW: 320, contKW: 210, peakNm: 900, contNm: 600, eta: 0.955 }, INV_ETA = 0.985, ACCESSORY_KW = 6;
 let FLIGHT;
 const INPUTS = [
-  ['Vehicle', [['mass', 'Gross mass', 'kg', 1200, 3200, 10], ['battery', 'Battery energy', 'kWh', 40, 160, 1], ['usable', 'Usable energy fraction', '', .6, .95, .01]]],
+  ['Vehicle', [['mass', 'Gross mass (2 occupants)', 'kg', 1400, 3000, 10], ['battery', 'Battery energy', 'kWh', 40, 160, 1], ['usable', 'Usable state-of-charge window', '', .6, .95, .01],
+    ['reserve', 'Landing reserve kept', '', 0, .4, .01]]],
   ['Rotor geometry (CADed baseline)', [['R', 'Tip radius R', 'm', .35, .75, .005], ['B', 'Blades B', '', 3, 10, 1], ['sigma', 'Solidity σ', '', .1, .6, .005],
     ['r0', 'Airfoil start r₀/R', '', .1, .35, .01], ['rm', 'Max-chord station r_m/R', '', .2, 1, .01], ['c2', 'Chord concavity c₂', '', -1.5, 0, .01], ['muD', 'Twist design inflow μ_d', '', 0, .8, .01]]],
-  ['Operating point', [['tip', 'Hover tip speed ωR', 'm/s', 150, 300, 1], ['duct', 'Duct thrust share', '', 0, .55, .01], ['fom', 'Figure of merit (ducted)', '', .5, .85, .01],
-    ['thH', 'Hover collective θc', '°', -10, 40, .5], ['vC', 'Cruise speed', 'km/h', 40, 260, 1], ['rpmC', 'Cruise RPM / hover RPM', '', .5, 1.1, .01], ['thC', 'Cruise collective θc', '°', -10, 50, .5]]],
-  ['Airframe', [['cda', 'Drag area C_D·A', 'm²', .6, 3, .05], ['clS', 'Body lift C_L·S', 'm²', 0, 4, .05], ['tiltMax', 'Tilt limit', '°', 0, 90, 1], ['cd0', 'Blade profile drag C_d0', '', .006, .02, .001]]],
+  ['Duct', [['etaD', 'Duct effectiveness η_d', '', .3, 1, .01], ['sigd', 'Exit-area ratio σ_d (petals as diffuser)', '', 1, 1.4, .01]]],
+  ['Operating point', [['tip', 'Hover tip speed ωR', 'm/s', 150, 300, 1], ['vC', 'Cruise speed', 'km/h', 40, 260, 1], ['rpmC', 'Cruise RPM / hover RPM', '', .6, 1.1, .01],
+    ['thC', 'Cruise collective θc (for chart C)', '°', -10, 50, .5]]],
+  ['Airframe', [['cda', 'Drag area C_D·A', 'm²', .6, 3, .05], ['clS', 'Body lift C_L·S', 'm²', 0, 4, .05], ['tiltMax', 'Tilt limit', '°', 0, 90, 1]]],
 ];
 function initFlight() {
   const pp = DATA.meta.proprotor;
-  FLIGHT = { mass: Math.round(MASS.road.m / 10) * 10, battery: Math.round(MASS.cells * 93.6 / 100) / 10, usable: .85, R: pp.R, B: pp.B, sigma: pp.sigma, r0: pp.r0_R, rm: pp.r_m, c2: pp.c2, muD: pp.mu_design,
-    tip: pp.tip_speed_hover, duct: pp.duct_thrust_share, fom: .72, thH: 2, vC: pp.v_cruise * 3.6, rpmC: pp.cruise_rpm_ratio, thC: 6, cda: 1.6, clS: 1.8, tiltMax: 30, cd0: .01, crMin: .05, ctMin: 0 };
-  FLIGHT.thH = Math.round(flightModel(FLIGHT).thHoverAuto * 2) / 2;
-  FLIGHT.thC = Math.round(flightModel(FLIGHT).thCruiseAuto * 2) / 2;
+  FLIGHT = { mass: Math.round(MASS.road.m / 10) * 10, battery: Math.round(MASS.cells * CELL.Wh / 100) / 10, usable: .9, reserve: .2,
+    R: pp.R, B: pp.B, sigma: pp.sigma, r0: pp.r0_R, rm: pp.r_m, c2: pp.c2, muD: pp.mu_design, etaD: pp.eta_duct ?? .8, sigd: pp.sigma_d ?? 1.15,
+    tip: pp.tip_speed_hover, vC: pp.v_cruise * 3.6, rpmC: pp.cruise_rpm_ratio, thC: 6, cda: 1.6, clS: 1.8, tiltMax: 30, crMin: .05, ctMin: 0 };
   $('flight-inputs').innerHTML = INPUTS.map(([g, list]) => `<h4>${g.toUpperCase()}</h4>` + list.map(([k, l, u, a, b, s]) =>
     `<label class="fin" for="fin-${k}">${l}<output id="fout-${k}"></output><input id="fin-${k}" type="range" min="${a}" max="${b}" step="${s}" value="${FLIGHT[k]}" data-k="${k}" data-u="${u}"></label>`).join('')).join('') +
     `<button class="tl-btn" id="fin-reset">Reset to CADed design</button>`;
@@ -836,14 +846,74 @@ function chordCoeffs(F) {               // Eq. 26 & 28 (R = 1)
 const chordAt = (F, x) => { const [a, b, c] = chordCoeffs(F); return a * x * x + b * x + c; };
 const phiDeg = (x, mu) => deg(Math.atan2(mu, x));                        // Eq. 8
 const twistDeg = (F, x) => phiDeg(x, F.muD) - phiDeg(.75, F.muD);         // memo §2E, referenced to 3/4 R
-function flightModel(F) {
-  const W = F.mass * G0, A = Math.PI * F.R ** 2, At = 4 * A, Tr = W / 4;
-  const om = F.tip / F.R;
-  const CT = Tr * (1 - F.duct) / (RHO * A * F.tip ** 2);                 // Eq. 6
-  const dl = W / At;                                                      // Eq. 2
-  const PidDuct = W ** 1.5 / Math.sqrt(4 * RHO * At), PidOpen = W * Math.sqrt(W / (2 * RHO * At));
-  const lamH = Math.sqrt(Tr / (RHO * A)) / F.tip;                          // ducted rotor inflow ratio
-  const hoverkW = PidDuct / F.fom / 1e3;
+const tcAt = (F, x) => { const t = clamp((x - F.r0) / (1 - F.r0)); return .30 + (.08 - .30) * (1 - (1 - t) ** 1.6); };
+const stallDeg = (tc) => 14 - 25 * Math.max(0, tc - .12);
+// NACA 24xx at Re ~1–2e6: linear lift to stall, blended into flat-plate post-stall; form-factor profile drag
+function polar(aDeg, tc) {
+  const a = rad(aDeg), a0 = rad(-2), cla = 2 * Math.PI * .92, ast = rad(stallDeg(tc));
+  const cd0 = .0065 * (1 + 2 * tc + 60 * tc ** 4), clLin = cla * (a - a0), cdLin = cd0 + .01 * (clLin - .25) ** 2;
+  const clP = 1.1 * Math.sin(2 * a), cdP = .02 + 1.8 * Math.sin(a) ** 2;
+  if (a > -.2 && a < ast) return [clLin, cdLin];
+  if (a >= ast) { const b = Math.min(1, (a - ast) / rad(4)); return [clLin * (1 - b) + clP * b, cdLin * (1 - b) + cdP * b]; }
+  return [clP, cdP];
+}
+// Ducted-rotor BEMT in hover: each annulus balances blade-element thrust against dT = πρv²r dr / σd²; the duct adds η_d(2σd − 1)·T_rotor
+function bemt(F, th75, tip, n = 30) {
+  const R = F.R, om = tip / R, r0 = F.r0 * R, dr = (R - r0) / n, gap = .97;
+  let Tr = 0, Q = 0, Qp = 0, amax = -99, stall = 0; const st = [];
+  for (let i = 0; i < n; i++) {
+    const r = r0 + (i + .5) * dr, x = r / R, c = chordAt(F, x) * R, th = rad(twistDeg(F, x) + th75), tc = tcAt(F, x);
+    let lo = 0, hi = .9 * tip, v = 0, phi = 0, alpha = 0, cl = 0, cd = 0, W2 = 0, dTb = 0;
+    for (let k = 0; k < 40; k++) {
+      v = (lo + hi) / 2; phi = Math.atan2(v, om * r); alpha = deg(th - phi); [cl, cd] = polar(alpha, tc);
+      W2 = v * v + (om * r) ** 2;
+      dTb = .5 * RHO * W2 * c * F.B * (cl * Math.cos(phi) - cd * Math.sin(phi)) * dr * gap;
+      if (dTb > Math.PI * RHO * v * v * r * dr / F.sigd ** 2) lo = v; else hi = v;
+    }
+    Tr += dTb;
+    Q += .5 * RHO * W2 * c * F.B * (cl * Math.sin(phi) + cd * Math.cos(phi)) * r * dr;
+    Qp += .5 * RHO * W2 * c * F.B * cd * Math.cos(phi) * r * dr;
+    amax = Math.max(amax, alpha); if (alpha > stallDeg(tc)) stall += 1 / n;
+    st.push({ x, alpha, phi: deg(phi), v, dT: dTb / dr });
+  }
+  const T = Tr * (1 + F.etaD * (2 * F.sigd - 1)), A = Math.PI * R * R, P = Q * om;
+  return { T, Tr, Q, P, Pp: Qp * om, om, amax, stall, st, fom: T ** 1.5 / Math.sqrt(4 * RHO * A * F.sigd) / P, CTs: Tr / (RHO * A * tip * tip) / F.sigma };
+}
+function trimHover(F, Treq, tip) {
+  let lo = -5, hi = 45;
+  if (bemt(F, hi, tip).T < Treq) return null;
+  for (let k = 0; k < 32; k++) { const m = (lo + hi) / 2; if (bemt(F, m, tip).T < Treq) lo = m; else hi = m; }
+  const s = bemt(F, hi, tip); s.th = hi; return s;
+}
+// largest thrust one rotor can make inside the motor power/torque limits and before the blade stalls
+function maxThrust(F, tip, limKW) {
+  let lo = -5, hi = 45, best = null;
+  for (let k = 0; k < 30; k++) {
+    const m = (lo + hi) / 2, s = bemt(F, m, tip);
+    const ok = s.P / 1e3 <= limKW && s.Q <= MOTOR.peakNm && s.stall <= .15;   // thick root sections may stall first
+    if (ok) { lo = m; best = s; } else hi = m;
+  }
+  return best;
+}
+// series/parallel pack with cell internal resistance: terminal current for a given electrical power
+function pack(Pkw, F) {
+  const N = MASS.cells, S = 12 * Math.max(1, Math.round(N / 288)), P = N / S;
+  const Voc = S * CELL.V * (F.battery / (N * CELL.Wh / 1000)), Rp = S / P * CELL.R, Pw = Pkw * 1e3;
+  const disc = Voc * Voc - 4 * Rp * Pw;
+  if (disc < 0) return { ok: false, S, P, Voc, Rp, I: Infinity, Icell: Infinity, C: Infinity, V: 0, eff: 0 };
+  const I = (Voc - Math.sqrt(disc)) / (2 * Rp);
+  return { ok: true, S, P, Voc, Rp, I, Icell: I / P, C: I / P / CELL.Ah, V: Voc - I * Rp, eff: (Voc - I * Rp) / Voc, heatKW: I * I * Rp / 1e3 };
+}
+const _fmCache = { key: null, val: null };
+function flightModel(F) {                // memoised: BEMT trims are too heavy to redo every animation frame
+  const key = JSON.stringify(F);
+  if (_fmCache.key === key) return _fmCache.val;
+  _fmCache.key = key; _fmCache.val = flightModelRaw(F);
+  return _fmCache.val;
+}
+function flightModelRaw(F) {
+  const W = F.mass * G0, A = Math.PI * F.R ** 2, At = 4 * A;
+  const om = F.tip / F.R, dl = W / At;
   // CG-based thrust split (memo Eq. 44: equal disk loading is optimal)
   let kFront = .5, splitPenalty = 1;
   if (MASS.rotors) {
@@ -851,119 +921,140 @@ function flightModel(F) {
     kFront = clamp((MASS.hover.cg.x - xr) / (xf - xr));
     splitPenalty = (2 * (kFront / 2) ** 1.5 + 2 * ((1 - kFront) / 2) ** 1.5) / (4 * .25 ** 1.5);
   }
-  // forward flight trim and power (momentum + blade profile + parasite); partial conversion via tilt
+  const Tavg = W / 4, Theavy = W * Math.max(kFront, 1 - kFront) / 2;
+  const hv = trimHover(F, Tavg, F.tip), hvHeavy = trimHover(F, Theavy, F.tip);
+  const hoverShaftKW = hv ? 4 * hv.P / 1e3 * splitPenalty : Infinity;
+  const hoverkW = hoverShaftKW / (MOTOR.eta * INV_ETA) + ACCESSORY_KW;
+  const tmax = maxThrust(F, F.tip, MOTOR.peakKW);
+  const margin = tmax && hvHeavy ? tmax.T / Theavy : 0;
+  // forward flight, calibrated to the BEMT hover split between induced and profile power
+  const vh = Math.sqrt(Tavg / (2 * RHO * A));
+  const kInd = hv ? (hv.P - hv.Pp) / (Tavg * vh) : 1.2;
+  const cdEff = hv ? 8 * hv.Pp / (F.sigma * RHO * A * F.tip ** 3) : .012;
   const powerAt = (V, rpmRatio = F.rpmC) => {
     const q = .5 * RHO * V * V, D = q * F.cda, L = q * F.clS;
     const Tz = Math.max(W - L, 0), T = Math.hypot(D, Tz), tilt = deg(Math.atan2(D, Tz));
-    const Ti = T / 4, a = rad(tilt);
-    const Vax = V * Math.sin(a), Ved = V * Math.cos(a);
+    const Ti = T / 4, a = rad(tilt), Vax = V * Math.sin(a), Ved = V * Math.cos(a);
     let vi = Math.sqrt(Ti / (2 * RHO * A));
     for (let k = 0; k < 40; k++) vi = Ti / (2 * RHO * A * Math.max(1e-3, Math.hypot(Ved, Vax + vi)));   // Glauert
-    const kd = Math.sqrt(1 / 2);                                            // ideal duct (σd = 1): induced power × 1/√2 vs open rotor
-    const Pi = 4 * Ti * vi * 1.15 * kd;                                      // κ = 1.15 non-ideal induced factor
     const tipC = F.tip * rpmRatio, mu = Ved / tipC;
-    const Pp = 4 * F.sigma * F.cd0 / 8 * RHO * A * tipC ** 3 * (1 + 4.65 * mu * mu);
-    const Pc = 4 * Ti * Vax;                                                // useful axial work (propulsive)
-    const Ppar = D * V;
-    return { V, tilt, T, mu, vi, Pi: Pi / 1e3, Pp: Pp / 1e3, Pc: Pc / 1e3, Ppar: Ppar / 1e3 };
+    const Pi = 4 * kInd * Ti * vi, Pp = 4 * F.sigma * cdEff / 8 * RHO * A * tipC ** 3 * (1 + 4.65 * mu * mu), Pc = 4 * Ti * Vax;
+    const shaft = (Pi + Pp) * splitPenalty + Pc;
+    return { V, tilt, T, mu, vi, Pi: Pi / 1e3, Pp: Pp / 1e3, Ppar: D * V / 1e3, Pshaft: shaft / 1e3, P: shaft / 1e3 / (MOTOR.eta * INV_ETA) + ACCESSORY_KW };
   };
+  const sweep = []; for (let v = 0; v <= 75; v += 1.5) sweep.push(powerAt(v, v < 1 ? 1 : F.rpmC));
+  sweep[0] = { ...sweep[0], P: hoverkW, Pshaft: hoverShaftKW };
   const Vc = F.vC / 3.6, cr = powerAt(Vc);
-  const hov = powerAt(0, 1);
-  const scale = hoverkW / (hov.Pi + hov.Pp);                               // rotor losses anchored to the FoM hover estimate
-  const tot = (s) => ({ ...s, Pi: s.Pi * scale, Pp: s.Pp * scale, P: (s.Pi + s.Pp) * scale + s.Pc });
-  const sweep = []; for (let v = 0; v <= 75; v += 1.5) sweep.push(tot(powerAt(v, v < 1 ? 1 : F.rpmC)));
-  const crP = tot(cr).P;
-  const E = F.battery * F.usable;
-  // collective that puts the 3/4-R section at α = 6° (Eq. 12)
-  const phi75H = phiDeg(.75, lamH), thHoverAuto = phi75H + 6 - twistDeg(F, .75);
-  const omC = om * F.rpmC, lamC = (Vc * Math.sin(rad(cr.tilt)) + cr.vi) / (F.tip * F.rpmC);
-  const thCruiseAuto = phiDeg(.75, lamC) + 6;
+  const bH = pack(hoverkW, F), bC = pack(cr.P, F);
+  const Euse = F.battery * F.usable * (1 - F.reserve);
+  const hoverMin = bH.ok ? Euse * bH.eff / hoverkW * 60 : 0, cruiseMin = bC.ok ? Euse * bC.eff / cr.P * 60 : 0;
+  const lamH = hv ? hv.st.reduce((a, s) => a + s.v, 0) / hv.st.length / F.tip : .25;
+  const lamC = (Vc * Math.sin(rad(cr.tilt)) + cr.vi) / (F.tip * F.rpmC);
   const roots = [chordAt(F, F.r0), chordAt(F, 1)];
-  return { W, A, At, Tr, om, CT, CTs: CT / F.sigma, dl, PidDuct, PidOpen, hoverkW, lamH, rpmHover: om * 60 / (2 * Math.PI), Mtip: F.tip / 340.3, kFront, splitPenalty,
-    cr: { ...cr, P: crP }, sweep, E, hoverMin: E / hoverkW * 60, cruiseMin: E / crP * 60, rangeKm: E / crP * Vc * 3.6, lamC, thHoverAuto, thCruiseAuto, roots,
-    installed: 4 * 230, cont: 4 * 165, sigmaMin: CT / .12 * F.sigma / F.sigma };
+  const ductShare = 1 - 1 / (1 + F.etaD * (2 * F.sigd - 1));
+  return { W, A, At, om, dl, hv, hvHeavy, tmax, margin, hoverkW, hoverShaftKW, perMotorKW: hvHeavy ? hvHeavy.P / 1e3 : Infinity, perMotorNm: hvHeavy ? hvHeavy.Q : Infinity,
+    CTs: hv ? hv.CTs : NaN, fom: hv ? hv.fom : NaN, lamH, lamC, rpmHover: om * 60 / (2 * Math.PI), Mtip: F.tip / 340.3, kFront, splitPenalty, ductShare, kInd, cdEff,
+    cr: { ...cr }, sweep, E: Euse, bH, bC, hoverMin, cruiseMin, rangeKm: cruiseMin / 60 * F.vC, roots, installed: 4 * MOTOR.peakKW, cont: 4 * MOTOR.contKW };
+}
+function physicsChecks(F, M) {
+  const cg = MASS.rotors ? Math.abs(MASS.hover.cg.x - ((MASS.rotors.FL.x + MASS.rotors.RL.x) / 2)) * 1000 : 0;
+  const c = (ok, mid) => (ok ? 'ok' : mid ? 'mid' : 'bad');
+  return [
+    ['Hover trim exists', M.hv ? `θ.75 = ${fmt(M.hv.th, 1)}°` : 'none', 'BEMT finds a collective that carries the weight', c(!!M.hv, false), 'If no collective lifts the car, the rotor is too small or the mass too high.'],
+    ['Blade loading C_T/σ', fmt(M.CTs, 3), '≤ 0.12 (memo §2B)', c(M.CTs <= .12, M.CTs <= .13), 'Above ~0.12 the sections run near stall everywhere.'],
+    ['Stall margin', `α_max ${fmt(M.hv?.amax, 1)}°`, '≤ 12° (stall 12–14°)', c(M.hv && M.hv.amax <= 12 && M.hv.stall === 0, M.hv && M.hv.amax <= 14), 'Highest section angle of attack in the hover trim.'],
+    ['Tip Mach number', fmt(M.Mtip, 2), '≤ 0.72', c(M.Mtip <= .72, M.Mtip <= .8), 'Compressibility drag and noise rise quickly above ~0.75.'],
+    ['Motor power, most-loaded rotor', `${fmt(M.perMotorKW, 0)} kW`, `${MOTOR.contKW} kW cont / ${MOTOR.peakKW} kW peak`, c(M.perMotorKW <= MOTOR.contKW, M.perMotorKW <= MOTOR.peakKW), 'Above continuous rating, hover is limited by motor temperature.'],
+    ['Motor torque, most-loaded rotor', `${fmt(M.perMotorNm, 0)} N·m`, `${MOTOR.contNm} cont / ${MOTOR.peakNm} peak`, c(M.perMotorNm <= MOTOR.contNm, M.perMotorNm <= MOTOR.peakNm), 'Shaft torque Q = P / ω from BEMT.'],
+    ['Thrust margin for control', `${fmt(M.margin, 2)} × hover`, '≥ 1.25', c(M.margin >= 1.25, M.margin >= 1.1), 'Spare thrust on the heaviest-loaded rotor at peak motor power; needed to hold attitude in gusts.'],
+    ['Cell current in hover', M.bH.ok ? `${fmt(M.bH.Icell, 0)} A (${fmt(M.bH.C, 1)}C)` : 'pack cannot deliver', `≤ ${CELL.Acont} A cont`, c(M.bH.ok && M.bH.Icell <= CELL.Acont, M.bH.ok && M.bH.Icell <= CELL.Apeak), `${M.bH.S}s ${fmt(M.bH.P, 0)}p pack; current from P = V·I with internal resistance.`],
+    ['Pack voltage under hover load', M.bH.ok ? `${fmt(M.bH.V, 0)} V of ${fmt(M.bH.Voc, 0)} V` : '—', '≥ 80 % of open-circuit', c(M.bH.ok && M.bH.eff >= .8, M.bH.ok && M.bH.eff >= .7), `Battery heat ${fmt(M.bH.heatKW, 0)} kW at this load.`],
+    ['Hover endurance (after reserve)', `${fmt(M.hoverMin, 1)} min`, '≥ 4 min for take-off + landing', c(M.hoverMin >= 4, M.hoverMin >= 2), `${fmt(F.reserve * 100, 0)} % kept for landing.`],
+    ['CG over rotor centroid', `${fmt(cg, 0)} mm off`, '≤ 50 mm', c(cg <= 50, cg <= 120), `Thrust split ${fmt(M.kFront * 100, 1)} / ${fmt((1 - M.kFront) * 100, 1)} % front / rear.`],
+    ['Cruise tilt within gimbal limit', `${fmt(M.cr.tilt, 1)}°`, `≤ ${F.tiltMax}°`, c(M.cr.tilt <= F.tiltMax, M.cr.tilt <= F.tiltMax + 5), 'Rotor axes must tilt enough to balance drag.'],
+    ['Cruise power vs continuous rating', `${fmt(M.cr.Pshaft, 0)} kW`, `≤ ${M.cont} kW`, c(M.cr.Pshaft <= M.cont, M.cr.Pshaft <= M.installed), 'Total shaft power at the cruise speed.'],
+    ['Model sanity: figure of merit', fmt(M.fom, 3), '0.60 – 0.82 is typical', c(M.fom >= .6 && M.fom <= .82, M.fom >= .5 && M.fom <= .88), 'Computed, not assumed. Outside this band, check the inputs.'],
+    ['Seats', '2 occupants', '2 by design', 'ok', 'Payload 180 kg included in the gross mass.'],
+  ];
 }
 function renderFlight() {
   if (!FLIGHT) return;
   const F = FLIGHT, M = flightModel(F);
   for (const g of INPUTS) for (const [k, , u, , , s] of g[1]) { const o = $('fout-' + k); if (o) o.textContent = `${fmt(F[k], s >= 1 ? 0 : s >= .1 ? 1 : s >= .01 ? 2 : 3)}${u ? ' ' + u : ''}`; }
+  const checks = physicsChecks(F, M);
+  const nBad = checks.filter((c) => c[3] === 'bad').length, nMid = checks.filter((c) => c[3] === 'mid').length;
   const st = (v, okMax, midMax) => (v <= okMax ? 'ok' : v <= midMax ? 'mid' : 'bad');
   const kpis = [
+    ['PHYSICS CHECKS', `${checks.length - nBad - nMid} / ${checks.length} pass`, `${nMid} marginal · ${nBad} failing`, nBad ? 'bad' : nMid ? 'mid' : 'ok'],
     ['DISK LOADING', `${fmt(M.dl / 47.88, 0)} lb/ft²`, `${fmt(M.dl, 0)} Pa · Eq. 2`, st(M.dl / 47.88, 60, 120)],
-    ['BLADE LOADING C_T/σ', fmt(M.CTs, 3), 'limit ≈ 0.12 · Eq. 6', st(M.CTs, .12, .13)],
-    ['HOVER POWER', `${fmt(M.hoverkW, 0)} kW`, `installed ${M.installed} kW peak`, st(M.hoverkW / M.installed, .8, 1)],
-    ['HOVER RPM / TIP MACH', `${fmt(M.rpmHover, 0)} · M${fmt(M.Mtip, 2)}`, 'ωR / a', st(M.Mtip, .72, .8)],
-    ['HOVER ENDURANCE', `${fmt(M.hoverMin, 1)} min`, `${fmt(M.E, 0)} kWh usable`, M.hoverMin >= 15 ? 'ok' : M.hoverMin >= 8 ? 'mid' : 'bad'],
-    ['CRUISE TILT', `${fmt(M.cr.tilt, 1)}°`, `limit ${F.tiltMax}°`, st(M.cr.tilt, F.tiltMax, F.tiltMax + 5)],
+    ['HOVER POWER (BEMT)', `${fmt(M.hoverkW, 0)} kW`, `${fmt(M.hoverShaftKW, 0)} kW shaft · FoM ${fmt(M.fom, 3)}`, st(M.perMotorKW, MOTOR.contKW, MOTOR.peakKW)],
+    ['HOVER COLLECTIVE', M.hv ? `${fmt(M.hv.th, 1)}°` : '—', `${fmt(M.rpmHover, 0)} rpm · M${fmt(M.Mtip, 2)}`, M.hv ? 'ok' : 'bad'],
+    ['THRUST MARGIN', `${fmt(M.margin, 2)} ×`, 'peak power, heaviest rotor', st(-M.margin, -1.25, -1.1)],
+    ['HOVER ENDURANCE', `${fmt(M.hoverMin, 1)} min`, `${fmt(M.E, 0)} kWh after reserve`, M.hoverMin >= 4 ? 'ok' : M.hoverMin >= 2 ? 'mid' : 'bad'],
+    ['CRUISE POWER / RANGE', `${fmt(M.cr.P, 0)} kW · ${fmt(M.rangeKm, 0)} km`, `${fmt(M.cruiseMin, 1)} min at ${fmt(F.vC, 0)} km/h`, M.rangeKm >= 40 ? 'ok' : M.rangeKm >= 15 ? 'mid' : 'bad'],
+    ['CELL CURRENT (HOVER)', M.bH.ok ? `${fmt(M.bH.Icell, 0)} A` : '—', `${fmt(M.bH.C, 1)}C · limit ${CELL.Acont} A`, M.bH.ok ? st(M.bH.Icell, CELL.Acont, CELL.Apeak) : 'bad'],
     ['CRUISE μ (EDGEWISE)', fmt(M.cr.mu, 3), 'Eq. 7 · practical μ < 0.7', st(M.cr.mu, .5, .7)],
-    ['CRUISE POWER / RANGE', `${fmt(M.cr.P, 0)} kW · ${fmt(M.rangeKm, 0)} km`, `${fmt(M.cruiseMin, 1)} min at ${fmt(F.vC, 0)} km/h`, M.rangeKm >= 80 ? 'ok' : M.rangeKm >= 30 ? 'mid' : 'bad'],
     ['ROOT / TIP CHORD', `${fmt(M.roots[0] * F.R * 1000, 0)} / ${fmt(M.roots[1] * F.R * 1000, 0)} mm`, 'Eq. 23, 28', M.roots[0] >= F.crMin && M.roots[1] >= F.ctMin ? 'ok' : 'bad'],
-    ['HOVER THRUST SPLIT', `${fmt(M.kFront * 100, 1)} / ${fmt((1 - M.kFront) * 100, 1)} %`, `front / rear · +${fmt((M.splitPenalty - 1) * 100, 2)} % power`, st(Math.abs(M.kFront - .5), .03, .08)],
   ];
-  $('flight-kpis').innerHTML = kpis.map(([k, v, s, c]) => `<div class="kpi ${c}"><small>${k}</small><b>${v}</b><span>${s}</span></div>`).join('');
+  $('flight-kpis').innerHTML = kpis.map(([k, v, s, c]) => `<div class="kpi ${c}"><small>${k}</small><b>${v}</b><span>${s}</span></div>`).join('') +
+    `<div class="checks"><table class="checks-table"><thead><tr><th>Check</th><th>Value</th><th>Limit</th><th>Status</th><th>Why it matters</th></tr></thead><tbody>${checks.map(([n, v, l, s, w]) =>
+      `<tr class="${s}"><td>${esc(n)}</td><td class="num">${esc(v)}</td><td>${esc(l)}</td><td><span class="pill ${s}">${s === 'ok' ? '● Pass' : s === 'mid' ? '▲ Marginal' : '■ Fail'}</span></td><td>${esc(w)}</td></tr>`).join('')}</tbody></table></div>`;
   const C = [];
-  // A. inflow angle across the blade (Fig. 5a)
   const xs = []; for (let x = F.r0; x <= 1.0001; x += .02) xs.push(+x.toFixed(3));
-  C.push(lineChart('Inflow angle across the blade', 'Fig. 5a · Eq. 8', 'Inflow angle φ = atan(μR/r). The hover curve uses the ducted inflow ratio λ, which is large here because of the high disk loading.',
+  if (M.hv) C.push(lineChart('Spanwise thrust loading in hover (BEMT)', 'blade-element momentum', `Thrust per metre of span along one blade at the trimmed collective (${fmt(M.hv.th, 1)}°). The duct lip adds ${fmt(M.ductShare * 100, 0)} % on top of the rotor.`,
+    { x: [0, 1], y: [0, Math.ceil(Math.max(...M.hv.st.map((s) => s.dT / F.B)) / 1000 + .5) * 1000], xl: 'r/R', yl: 'N per m per blade', series: [{ name: 'dT/dr', c: 'var(--s1)', pts: M.hv.st.map((s) => [s.x, s.dT / F.B]) }] }));
+  C.push(lineChart('Inflow angle across the blade', 'Fig. 5a · Eq. 8', 'Inflow angle φ = atan(μR/r). The hover curve is the BEMT solution, including induced inflow, which is large because of the high disk loading.',
     { x: [0, 1], y: [0, 90], xl: 'r/R', yl: 'φ, deg', series: [
-      { name: `Hover λ = ${fmt(M.lamH, 2)}`, c: 'var(--s1)', pts: xs.map((x) => [x, phiDeg(x, M.lamH)]) },
+      { name: 'Hover (BEMT)', c: 'var(--s1)', pts: M.hv ? M.hv.st.map((s) => [s.x, s.phi]) : [] },
       { name: `Cruise λ = ${fmt(M.lamC, 2)}`, c: 'var(--s2)', pts: xs.map((x) => [x, phiDeg(x, M.lamC)]) },
       { name: 'μ = 0.1 / 0.5 / 0.9', c: 'var(--muted)', dash: '3 3', pts: xs.map((x) => [x, phiDeg(x, .1)]) },
       { name: '', c: 'var(--muted)', dash: '3 3', pts: xs.map((x) => [x, phiDeg(x, .5)]) },
       { name: '', c: 'var(--muted)', dash: '3 3', pts: xs.map((x) => [x, phiDeg(x, .9)]) }] }));
-  // B. phi_3/4 and delta-phi vs mu (Fig. 5b)
   const mus = []; for (let m = .05; m <= .9001; m += .025) mus.push(+m.toFixed(3));
   C.push(lineChart('Inflow at ¾R and root-to-tip change', 'Fig. 5b · Eq. 32–33', `Δφ peaks at μ = √(r₀/R) = ${fmt(Math.sqrt(F.r0), 2)}. A large Δφ means no single twist suits the whole operating range.`,
     { x: [0, .9], y: [0, 60], xl: 'advance / inflow ratio μ', yl: 'deg', vline: [Math.sqrt(F.r0), '√r₀'], series: [
       { name: 'φ at r/R = 0.75', c: 'var(--s1)', pts: mus.map((m) => [m, phiDeg(.75, m)]) },
       { name: 'Δφ root → tip', c: 'var(--s2)', pts: mus.map((m) => [m, phiDeg(F.r0, m) - phiDeg(1, m)]) }] }));
-  // C. angle of attack hover & cruise (Fig. 8)
-  C.push(lineChart('Section angle of attack, hover vs cruise', 'Fig. 8 · Eq. 12', 'α(r) = β(r) − φ(r) + θc. Hatched: stall beyond ±15°; below about −2° the cambered NACA 24xx sections stop producing positive lift.',
+  C.push(lineChart('Section angle of attack, hover vs cruise', 'Fig. 8 · Eq. 12', 'Hover: α from the BEMT trim. Cruise: α(r) = β(r) − φ(r) + θc with the chosen collective. Hatched: stall beyond ±15°; below about −2° the cambered sections stop lifting.',
     { x: [0, 1], y: [-20, 40], xl: 'r/R', yl: 'α, deg', zones: [[15, 40, 'Stalled flow'], [-15, -2, 'Negative thrust'], [-20, -15, '']], series: [
-      { name: `Hover, θc = ${fmt(F.thH, 1)}°`, c: 'var(--s1)', pts: xs.map((x) => [x, twistDeg(F, x) - phiDeg(x, M.lamH) + F.thH]) },
+      { name: M.hv ? `Hover, trimmed θc = ${fmt(M.hv.th, 1)}°` : 'Hover (no trim)', c: 'var(--s1)', pts: M.hv ? M.hv.st.map((s) => [s.x, s.alpha]) : [] },
       { name: `Cruise, θc = ${fmt(F.thC, 1)}°`, c: 'var(--s2)', pts: xs.map((x) => [x, twistDeg(F, x) - phiDeg(x, M.lamC) + F.thC]) }] }));
-  // D. chord distribution + planform
   C.push(lineChart('Blade chord distribution', 'Eq. 23, 26, 28', `Quadratic chord with maximum at r_m/R = ${fmt(F.rm, 2)} meeting σ = ${fmt(F.sigma, 3)} with B = ${F.B}. Filled band is the blade planform (chord centred on the pitch axis).`,
     { x: [0, 1], y: [-.3, .3], xl: 'r/R', yl: 'c/R (planform ±c/2)', band: xs.map((x) => [x, chordAt(F, x) / 2]), series: [
       { name: 'c(r)/R', c: 'var(--s1)', pts: xs.map((x) => [x, chordAt(F, x)]) }], yTicks: [-.3, -.2, -.1, 0, .1, .2, .3] }));
   C.push(lineChart('Geometric twist', 'memo §2E', `β(r) aligned with the design inflow ratio μ_d = ${fmt(F.muD, 2)} and referenced to zero at ¾R. Collective is added on top (Eq. 9).`,
     { x: [0, 1], y: [-10, 40], xl: 'r/R', yl: 'β, deg', series: [{ name: 'β(r)', c: 'var(--s3)', pts: xs.map((x) => [x, twistDeg(F, x)]) }] }));
-  // E. quadratic chord solution space (Fig. 12)
   C.push(solutionSpace(F));
-  // F. edgewise V-perp polar (Fig. 3)
   C.push(polarChart(M.cr.mu));
-  // G. power vs speed
-  C.push(lineChart('Power required vs airspeed', 'momentum + blade-element profile + parasite', `Anchored to the hover estimate (ideal ducted power / FoM). Rotor axes tilt to balance drag; cruise at ${fmt(F.vC, 0)} km/h needs ${fmt(M.cr.tilt, 1)}° tilt.`,
-    { x: [0, 270], y: [0, Math.max(1200, M.hoverkW * 1.15)], xl: 'airspeed, km/h', yl: 'kW', vline: [F.vC, 'cruise'], hlines: [[M.installed, 'installed peak'], [M.cont, 'continuous']], series: [
-      { name: 'Total', c: 'var(--s1)', pts: M.sweep.map((s) => [s.V * 3.6, s.P]) },
-      { name: 'Induced', c: 'var(--s2)', pts: M.sweep.map((s) => [s.V * 3.6, s.Pi]) },
-      { name: 'Profile', c: 'var(--s3)', pts: M.sweep.map((s) => [s.V * 3.6, s.Pp]) },
+  C.push(lineChart('Electrical power vs airspeed', 'BEMT-calibrated momentum + profile + parasite', `Induced and profile parts are calibrated to the BEMT hover solution (induced factor ${fmt(M.kInd, 2)}, effective C_d ${fmt(M.cdEff, 4)}). Rotor axes tilt to balance drag; cruise at ${fmt(F.vC, 0)} km/h needs ${fmt(M.cr.tilt, 1)}° tilt.`,
+    { x: [0, 270], y: [0, Math.max(1200, Math.min(3000, M.hoverkW * 1.15))], xl: 'airspeed, km/h', yl: 'kW', vline: [F.vC, 'cruise'], hlines: [[M.installed, 'motor peak'], [M.cont, 'continuous']], series: [
+      { name: 'Total electrical', c: 'var(--s1)', pts: M.sweep.map((s) => [s.V * 3.6, s.P]) },
+      { name: 'Induced (shaft)', c: 'var(--s2)', pts: M.sweep.map((s) => [s.V * 3.6, s.Pi]) },
+      { name: 'Profile (shaft)', c: 'var(--s3)', pts: M.sweep.map((s) => [s.V * 3.6, s.Pp]) },
       { name: 'Parasite', c: 'var(--s4)', pts: M.sweep.map((s) => [s.V * 3.6, s.Ppar]) }] }));
-  // H. Froude efficiency vs disk area (Eq. 3) at cruise thrust
   const T = M.cr.T, Vc = F.vC / 3.6, areas = []; for (let a = 1; a <= 30.01; a += .5) areas.push(a);
   const etaP = (Aa) => 2 * Vc / (Vc + Math.sqrt(2 * T / (RHO * Aa) + Vc * Vc));
   C.push(lineChart('Ideal propulsive efficiency vs disk area', 'Eq. 3, 45', `Froude efficiency at the cruise thrust (${fmt(T / 1000, 1)} kN) and ${fmt(F.vC, 0)} km/h. Adding area has diminishing returns; the fan-wheels give ${fmt(M.At, 2)} m².`,
-    { x: [0, 30], y: [0, 1], xl: 'total disk area, m²', yl: 'η_p', vline: [M.At, 'Rev 08'], series: [{ name: 'η_p (ideal, upper bound)', c: 'var(--s1)', pts: areas.map((a) => [a, etaP(a)]) }] }));
+    { x: [0, 30], y: [0, 1], xl: 'total disk area, m²', yl: 'η_p', vline: [M.At, 'Rev 08.1'], series: [{ name: 'η_p (ideal, upper bound)', c: 'var(--s1)', pts: areas.map((a) => [a, etaP(a)]) }] }));
   $('flight-charts').innerHTML = C.join('');
   wireTips();
-  // notes + allocation
   const r = MASS.rotors, arms = ['FL', 'FR', 'RL', 'RR'].map((k) => [k, r[k].x - MASS.hover.cg.x, r[k].z - MASS.hover.cg.z]);
-  const kq = (M.hoverkW * 1000 / 4 * F.fom) / M.om / M.Tr; // reaction torque per unit thrust, m
+  const kq = M.hv ? M.hv.Q / (M.W / 4) : 0;   // reaction torque per unit thrust, m
   const spin = { FL: 1, FR: -1, RL: -1, RR: 1 };
   $('flight-notes').innerHTML = `
-    <div><h4>Findings for the CADed design</h4><ul>
-      <li>Wheel-limited fans give ${fmt(M.At, 2)} m² of disk for ${fmt(F.mass, 0)} kg: ${fmt(M.dl / 47.88, 0)} lb/ft², several times an open-proprotor eVTOL. Hover power and energy dominate the design.</li>
-      <li>C<sub>T</sub>/σ = ${fmt(M.CTs, 3)} ${M.CTs <= .12 ? 'is inside' : 'exceeds'} the ≈0.12 stall limit; it set σ = 0.40 with 7 blades (memo §2B).</li>
-      <li>Twist aligned to μ_d = ${fmt(F.muD, 2)} keeps the hover blade unstalled (chart C). Without a wing the rotors still carry weight in cruise, so cruise is edgewise (μ ≈ ${fmt(M.cr.mu, 2)}) rather than the memo's axial propeller case.</li>
-      <li>Endurance ≈ ${fmt(M.hoverMin, 1)} min hovering, or ${fmt(M.rangeKm, 0)} km at cruise. Mass reduction and a deployable wing (Rev 09 trade) are the main levers.</li></ul></div>
-    <div><h4>Hover control allocation</h4><p>Rows give force and moments per newton of each rotor's thrust (moment arms from the hover CG; yaw from reaction torque k_Q ≈ ${fmt(kq * 1000, 1)} mm).</p>
+    <div><h4>Findings for the Rev 08.1 design</h4><ul>
+      <li>Bigger rotors (R ${fmt(F.R * 1000, 0)} mm, ${fmt(M.At, 2)} m² total) and a lighter car bring disk loading to ${fmt(M.dl / 47.88, 0)} lb/ft². That is still several times an open-proprotor eVTOL, so hover power dominates.</li>
+      <li>BEMT trims hover at θ.75 = ${M.hv ? fmt(M.hv.th, 1) : '—'}° with a computed figure of merit of ${fmt(M.fom, 3)}; ${fmt(M.hoverkW, 0)} kW electrical. The open petals form a diffuser (σ_d ${fmt(F.sigd, 2)}), so the duct carries ${fmt(M.ductShare * 100, 0)} % of the thrust.</li>
+      <li>High-power 21700 cells keep hover current at ${M.bH.ok ? fmt(M.bH.Icell, 0) : '—'} A per cell (${fmt(M.bH.C, 1)}C). The old 4680 pack would have needed about 12C from cells rated near 3–5C.</li>
+      <li>Endurance is ${fmt(M.hoverMin, 1)} min hovering or ${fmt(M.rangeKm, 0)} km at cruise after a ${fmt(F.reserve * 100, 0)} % reserve: a short-hop vehicle. A deployable wing (memo's axial-cruise case) is the next big lever.</li></ul></div>
+    <div><h4>Hover control allocation</h4><p>Rows give force and moments per newton of each rotor's thrust (moment arms from the hover CG; yaw from BEMT reaction torque, k_Q ≈ ${fmt(kq * 1000, 1)} mm).</p>
       <div style="overflow-x:auto"><table class="alloc"><tr><th></th>${arms.map((a) => `<th>${a[0]}</th>`).join('')}</tr>
       <tr><th>Thrust</th>${arms.map(() => '<td>1</td>').join('')}</tr>
       <tr><th>Roll (m)</th>${arms.map((a) => `<td>${fmt(a[2], 3)}</td>`).join('')}</tr>
       <tr><th>Pitch (m)</th>${arms.map((a) => `<td>${fmt(-a[1], 3)}</td>`).join('')}</tr>
       <tr><th>Yaw (m)</th>${arms.map((a) => `<td>${fmt(spin[a[0]] * kq, 4)}</td>`).join('')}</tr></table></div>
-      <p>Four rotors and four control axes: the matrix is square, so a single rotor failure leaves the vehicle under-actuated. Per the Rev 07 register, a degraded three-fan configuration is not assumed controllable; the ballistic parachute covers that case.</p></div>
-    <div><h4>Method and limits</h4><p>Momentum theory with an ideal duct (expansion ratio 1), FoM for viscous losses, Glauert inflow in forward flight, blade profile power σC<sub>d0</sub>/8·ρA(ωR)³(1+4.65μ²) and a drag-area airframe. Induced inflow is included in hover φ, unlike the memo's simplified figures. Concept-level only: no aeroelastic, acoustic, duct-lip separation or transient analysis.</p></div>`;
+      <p>Four rotors and four control axes: a single rotor failure leaves the vehicle under-actuated, so the ballistic parachute covers that case.</p></div>
+    <div><h4>Method and limits</h4><p>Hover: blade-element momentum theory over 30 annuli of the CADed blade (chord, twist, thickness), NACA 24xx lift and drag with stall, ducted momentum with exit-area ratio σ_d and duct effectiveness η_d, 3 % tip-gap loss; collective trimmed to the CG-weighted thrust. Forward flight: Glauert inflow and advance-ratio profile power calibrated to that hover solution. Battery: ${M.bH.S}s pack with 10 mΩ cells. Not modelled: aeroelasticity, duct-lip separation in crosswind, acoustics, transients and thermal time constants.</p></div>`;
 }
 // --- chart helpers (SVG, one y-axis, theme tokens, hover crosshair)
 let chartId = 0;
@@ -1277,27 +1368,27 @@ function regionBrief(id, view) {
       unlock: 'The clutch releases the rotor from the rim. The brake caliper and two lock pins index the rim to the module. Petals open into an inlet collector and an exit diffuser; collective drives from 90° towards the hover setting.',
       convert: `The harmonic-drive actuator is swinging the module about the hinge above the tyre: ${fmt(st.yoke * 90, 0)}° of 90°. The fender cap rides on the yoke; two RVDTs must agree before the next step.`,
       spinup: `The motor accelerates the 7-blade rotor towards ${fmt(M.rpmHover, 0)} rpm. The seven stator vanes straighten the swirl. ${front === (id[1] === 'L') ? 'This diagonal pair spins counter-clockwise.' : 'This diagonal pair spins clockwise.'}`,
-      hover: `Carrying ${fmt(share * 100, 1)} % of the vehicle weight: ${fmt(T / 1000, 1)} kN, of which the duct lip provides about ${fmt(FLIGHT.duct * 100, 0)} %. Disk loading ${fmt(M.dl / 47.88, 0)} lb/ft².`,
+      hover: `Carrying ${fmt(share * 100, 1)} % of the vehicle weight: ${fmt(T / 1000, 1)} kN, of which the duct provides about ${fmt(M.ductShare * 100, 0)} %. Disk loading ${fmt(M.dl / 47.88, 0)} lb/ft².`,
       cruise: `The gimbal tilts the rotor axis ${fmt(st.tilt, 1)}° forward. Edgewise advance ratio μ ≈ ${fmt(M.cr.mu, 2)} (NASA TM Eq. 7), collective ${fmt(st.pitch, 1)}°.`,
     };
     now = txt[ph];
     figs = [['Rotor speed', `${fmt(rpm, 0)} rpm`], ['Motor power', `${fmt(per, 0)} kW`], ['Thrust', flying ? `${fmt(T / 1000, 2)} kN` : '0 kN'], ['Conversion yoke', `${fmt(st.yoke * 90, 0)}°`],
       ['Cruise tilt', `${fmt(st.tilt, 1)}°`], ['Collective θ.75', `${fmt(st.pitch, 1)}°`], ['Petals', `${fmt(st.petals * 100, 0)} %`], ['Clutch', st.rotorLocked ? 'Engaged (wheel drive)' : 'Released (rotor free)']];
   } else if (id === 'battery') {
-    const E = FLIGHT.battery, I = elec * 1000 / 800, C = elec / E;
+    const E = FLIGHT.battery, bp = pack(elec, FLIGHT), I = bp.I, C = elec / E;
     now = { assembly: 'Nineteen modules drop into the floor tray and the rear stack behind the seats; the mica-lined lid seals the pack.',
       road: `Supplying about ${fmt(elec, 0)} kW for driving: a gentle ${fmt(C, 2)}C. Cold plates run on the low-temperature loop.`,
       prepare: 'Contactors closed, pre-charge complete. The BMS confirms state of charge and cell temperatures before conversion is allowed.',
       unlock: 'Small loads only (actuators, petals, pumps). The BMS reserves energy for the flight and the landing.',
       convert: 'Small loads only (conversion actuators). The BMS holds the flight reserve.',
       spinup: `Ramping to ${fmt(elec, 0)} kW as the rotors spin up; the chiller pre-cools the cold plates.`,
-      hover: `Discharging at ${fmt(C, 1)}C: about ${fmt(I, 0)} A at 800 V. At this rate the usable ${fmt(E * FLIGHT.usable, 0)} kWh lasts about ${fmt(M.hoverMin, 1)} min.`,
-      cruise: `About ${fmt(elec, 0)} kW (${fmt(C, 1)}C, ${fmt(I, 0)} A). Roughly ${fmt(M.rangeKm, 0)} km of range at this speed from a full pack.` }[ph];
-    figs = [['Cells', `${MASS.cells.toLocaleString()} × 4680`], ['Energy', `${fmt(E, 1)} kWh`], ['Pack power', `${fmt(elec, 0)} kW`], ['Current @ 800 V', `${fmt(I, 0)} A`], ['C-rate', `${fmt(C, 2)}C`], ['Pack mass', `${fmt(MASS.road.bySys['200 Energy storage'], 0)} kg`]];
+      hover: `Discharging at ${fmt(C, 1)}C: about ${fmt(I, 0)} A, ${fmt(bp.Icell, 0)} A per cell against a 60 A rating. After the landing reserve, hover lasts about ${fmt(M.hoverMin, 1)} min.`,
+      cruise: `About ${fmt(elec, 0)} kW (${fmt(C, 1)}C, ${fmt(I, 0)} A). Roughly ${fmt(M.rangeKm, 0)} km at this speed after the landing reserve.` }[ph];
+    figs = [['Cells', `${MASS.cells.toLocaleString()} × 21700 high-power`], ['Energy', `${fmt(E, 1)} kWh`], ['Pack power', `${fmt(elec, 0)} kW`], ['Pack current', `${fmt(I, 0)} A`], ['Per cell', `${fmt(bp.Icell, 1)} A of ${CELL.Acont} A`], ['C-rate', `${fmt(C, 2)}C`], ['Pack mass', `${fmt(MASS.road.bySys['200 Energy storage'], 0)} kg`]];
   } else if (id === 'power') {
     now = flying ? `Four SiC inverters each deliver about ${fmt(elec / 4, 0)} kW to their fan motors, controlling RPM for thrust allocation. The junction box fuses every branch; the insulation monitor watches the 800 V system.`
       : ph === 'road' ? `The inverters run the motors in torque mode for driving (≈${fmt(elec, 0)} kW total) with regenerative braking.` : 'HV system live; the DC-DC converter supplies 14 V to avionics, actuators and the 12 V backup battery.';
-    figs = [['Inverters', '4 × 250 kW SiC'], ['Per inverter', `${fmt(elec / 4, 0)} kW`], ['Bus voltage', '800 V nominal'], ['DC-DC', '3 kW to 14 V'], ['On-board charger', '22 kW AC'], ['DC fast charge', 'CCS2 up to 350 kW']];
+    figs = [['Inverters', '4 × 350 kW SiC'], ['Per inverter', `${fmt(elec / 4, 0)} kW`], ['Bus voltage', '820 V nominal (228s)'], ['DC-DC', '3 kW to 14 V'], ['On-board charger', '22 kW AC'], ['DC fast charge', 'CCS2 up to 350 kW']];
   } else if (id === 'cockpit') {
     now = flying ? 'The sidestick commands pitch and roll rates and the thrust lever commands climb. The steering yoke is locked centred; the HUD shows flight symbology. The parachute handle is armed overhead.'
       : ph === 'road' ? 'Steer-by-wire yoke and pedals are active. The sidestick and thrust lever are inhibited. The mode selector reads ROAD.'
@@ -1400,8 +1491,399 @@ function renderBrief(full) {
   ui.brief.querySelector('.rb-figs').innerHTML = B.figs.map(([k, v]) => `<dt>${esc(k.toUpperCase())}</dt><dd>${esc(v)}</dd>`).join('');
 }
 
-// open the remembered tab, or a deep link (#sequence / #advanced / #flight)
+// ------------------------------------------------------------------ 08 miniature prototype
+// Geometry from cad/source/build_mini.py (advanced/data/mini/*). The configurator swaps catalogue-class hobby parts
+// and recomputes mass, CG (from the CAD instance positions in the flight pose), thrust, current, hover time and cost.
+const MINI = { data: null, buf: null, scene: null, root: null, nodes: {}, recs: [], conv: 0, explode: 0, step: 0, shell: true, cad: null, cfg: null, anim: null };
+// typical catalogue figures for 12-blade alloy-housing EDF units at their rated cell count (static, full throttle)
+const EDFS = [
+  { label: '64 mm EDF, 4S', S: 4, T: 1.15, A: 52, m: .125, od: .070, price: 45 },
+  { label: '70 mm EDF, 6S', S: 6, T: 2.1, A: 78, m: .235, od: .077, price: 70 },
+  { label: '80 mm EDF, 6S', S: 6, T: 2.8, A: 92, m: .330, od: .088, price: 95 },
+  { label: '90 mm EDF, 6S (CADed)', S: 6, T: 3.4, A: 100, m: .420, od: .098, price: 110 },
+];
+const ESCS = [{ label: '60 A', A: 60, m: .060, price: 35 }, { label: '80 A', A: 80, m: .075, price: 45 }, { label: '100 A (CADed)', A: 100, m: .095, price: 55 }, { label: '120 A', A: 120, m: .115, price: 75 }];
+const SERVOS = [{ label: '20 kg·cm', tq: 20, m: .055, price: 18 }, { label: '25 kg·cm', tq: 25, m: .062, price: 22 }, { label: '35 kg·cm (CADed)', tq: 35, m: .070, price: 28 }, { label: '60 kg·cm (large case)', tq: 60, m: .150, price: 55 }];
+const PROTO_DEFAULT = { edf: 3, esc: 2, servo: 2, S: 6, mAh: 5000, C: 75, packs: 2, batX: 0, kInst: .92, usable: .8, misc: .19 };
+const PROTO_INPUTS = [
+  ['Propulsion', [['edf', 'Ducted fan (×4)', 'sel', EDFS], ['esc', 'ESC (×4)', 'sel', ESCS], ['kInst', 'Installed thrust (inlet + pod losses)', '', .8, 1, .01]]],
+  ['Battery', [['S', 'Cells in series', 'sel', [{ label: '4S (14.8 V)', v: 4 }, { label: '6S (22.2 V)', v: 6 }]], ['mAh', 'Capacity per pack', 'mAh', 3000, 10000, 100], ['C', 'Continuous C rating', 'C', 25, 100, 5],
+    ['packs', 'Packs in parallel', '', 1, 2, 1], ['usable', 'Capacity used before landing', '', .6, .9, .01], ['batX', 'Battery position (+ = forward)', 'mm', -40, 40, 1]]],
+  ['Pods and airframe', [['servo', 'Conversion servo (×4)', 'sel', SERVOS], ['misc', 'Wiring, screws, paint', 'kg', .05, .5, .01]]],
+];
+const FIL = { lwpla: ['LW-PLA', 40, 10], petg: ['PETG', 22, 18], tpu: ['TPU 95A', 35, 9], clear_petg: ['Clear PETG', 25, 12] };   // name, $/kg, g/h printed
+const BUY = { 'JDM-404': 75, 'JDM-405': 30, 'JDM-406': 15, 'JDM-408': 15, 'JDM-409': 15, 'JDM-410': 1.2, 'JDM-411': 3 };
+const EXTRAS = [['M3 bolts, nylock nuts and heat-set inserts (assorted kit)', 1, 15], ['XT90 connectors, XT90 parallel lead, 10 / 12 AWG silicone wire', 1, 30], ['Servo extension leads, 300 mm', 4, 2],
+  ['Battery straps (velcro, 250 mm)', 2, 3], ['2 mm carbon plate blank (400 × 150) or cut service', 1, 35]];
+const TOOLS = [['ExpressLRS transmitter (skip if you own one)', 1, 90], ['6S balance charger', 1, 70], ['LiPo fire-resistant bag', 1, 15]];
+
+function fetchPack(path) {
+  return fetch(new URL(path + '.bin', BASE)).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(path + ' ' + r.status))))
+    .catch(() => fetch(new URL(path + '.json', BASE)).then((r) => r.json()).then((j) => {
+      const bin = atob(j.b64), out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out.buffer;
+    }));
+}
+let miniPromise;
+function bootMini() {
+  if (!miniPromise) {
+    const pre = window.__JD_DATA && window.__JD_DATA.mini;
+    miniPromise = (pre ? Promise.resolve([pre.parts, pre.meshes]) : Promise.all([fetch(new URL('data/mini/parts.json', BASE)).then((r) => r.json()), fetchPack('data/mini/meshes')]))
+      .then(([d, b]) => { MINI.data = d; MINI.buf = b; buildMini(); measureMini(); initProto(); $('proto-loading').remove(); })
+      .catch((e) => { const el = $('proto-loading'); if (el) el.textContent = 'PROTOTYPE CAD FAILED TO LOAD: ' + e.message; throw e; });
+  }
+  return miniPromise;
+}
+const MINI_EXPLODE = {
+  'JDM-101': [.07, .14, 0], 'JDM-102': [0, .15, 0], 'JDM-103': [-.07, .14, 0], 'JDM-104': [0, .22, 0],
+  'JDM-202': [0, -.03, 0], 'JDM-203': [0, .03, 0], 'JDM-204': [0, .05, 0], 'JDM-403': [0, .08, 0], 'JDM-404': [0, .09, 0], 'JDM-405': [0, .2, 0],
+  'JDM-402': [0, .05, 0], 'JDM-406': [0, .06, 0], 'JDM-408': [0, .05, 0], 'JDM-409': [0, .06, 0],
+  'JDM-209': [0, -.02, -.03], 'JDM-205': [0, .03, 0], 'JDM-410': [0, .06, 0], 'JDM-407': [.05, .03, 0], 'JDM-411': [0, .05, .02], 'JDM-208': [0, .02, .03],
+  'JDM-206': [0, 0, .05], 'JDM-207': [0, 0, .11], 'JDM-401': [0, 0, -.02],
+};
+function buildMini() {
+  const D = MINI.data, sc = MINI.scene = new THREE.Scene();
+  sc.add(new THREE.HemisphereLight(0xcfe9ff, 0x0b1a22, 0.7));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.7); sun.position.set(.6, 1.2, .8); sc.add(sun);
+  const grid = new THREE.GridHelper(2.4, 48, 0x2f7f8d, 0x14353f); grid.material.transparent = true; grid.material.opacity = .55; sc.add(grid);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(.5, .504, 128), new THREE.MeshBasicMaterial({ color: 0x6be1ed, transparent: true, opacity: .35, side: THREE.DoubleSide }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = .0005; sc.add(ring);
+  const mats = {};
+  const mat = (k) => mats[k] || (mats[k] = (() => {
+    const m = D.materials[k], L = LOOKS[m.look] || LOOKS.metal;
+    const x = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(m.color), envMap: envTex, envMapIntensity: .9, side: THREE.DoubleSide, ...L });
+    if (L.transparent) x.depthWrite = false;
+    return x;
+  })());
+  MINI.hot = new THREE.MeshPhysicalMaterial({ color: 0xffb35c, emissive: 0x6a3200, emissiveIntensity: .6, metalness: .2, roughness: .45, side: THREE.DoubleSide });
+  const geos = D.parts.map((p) => decode(p, MINI.buf)), edges = geos.map((g) => new THREE.EdgesGeometry(g, 28));
+  const nodes = D.nodes.map((n) => { const g = new THREE.Group(); g.userData.id = n.id; g.position.set(...n.pos); g.quaternion.set(...n.q); if (n.mirror) g.scale.set(1, 1, -1); return { def: n, group: g }; });
+  nodes.forEach((r) => { if (r.def.parent >= 0) nodes[r.def.parent].group.add(r.group); else MINI.root = r.group; MINI.nodes[r.def.id] = r; });
+  sc.add(MINI.root);
+  D.instances.forEach((s) => {
+    const p = D.parts[s[0]], me = new THREE.Mesh(geos[s[0]], mat(p.material)), holder = new THREE.Group();
+    me.position.set(s[2], s[3], s[4]); me.quaternion.set(s[5], s[6], s[7], s[8]);
+    me.add(new THREE.LineSegments(edges[s[0]], cadLine));
+    holder.add(me); nodes[s[1]].group.add(holder);
+    MINI.recs.push({ me, holder, p, pn: p.pn, base: me.material, ex: new THREE.Vector3(...(MINI_EXPLODE[p.pn] || [0, 0, 0])) });
+  });
+}
+function poseMini(conv, explode) {
+  for (const c of ['FL', 'FR', 'RL', 'RR']) MINI.nodes['my_' + c].group.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), rad(-90 * conv));
+  for (const r of MINI.recs) r.holder.position.copy(r.ex).multiplyScalar(explode);
+}
+// CAD-derived numbers the configurator needs: instance positions in the flight pose, thrust lines, hinge arms
+function measureMini() {
+  poseMini(1, 0); MINI.root.updateMatrixWorld(true);
+  const items = [], v = new THREE.Vector3();
+  for (const r of MINI.recs) items.push({ pn: r.pn, m: r.p.mass_kg, p: r.me.localToWorld(v.set(...r.p.com)).clone() });
+  MINI.recs.forEach((r, i) => { let g = r.holder.parent; while (g && !/^m[cyp]_/.test(g.userData.id || '')) g = g.parent; items[i].corner = g ? g.userData.id.slice(3) : null; });
+  const hinge = new THREE.Vector3(), hingeR = new THREE.Vector3();
+  MINI.nodes.my_FL.group.getWorldPosition(hinge);
+  const edf = items.filter((it) => it.pn === 'JDM-401');
+  const fl = edf.find((it) => it.corner === 'FL');
+  const pod = items.filter((it) => it.corner === 'FL' && ['JDM-206', 'JDM-207', 'JDM-401', 'JDM-208', 'JDM-411'].includes(it.pn));
+  const podM = pod.reduce((a, b) => a + b.m, 0), podZ = pod.reduce((a, b) => a + b.m * b.p.z, 0) / podM;
+  poseMini(0, 0); MINI.root.updateMatrixWorld(true);
+  MINI.nodes.my_FL.group.getWorldPosition(hingeR);
+  const podRoad = MINI.recs.filter((r) => r.pn === 'JDM-206').map((r) => r.me.getWorldPosition(new THREE.Vector3())).find((p) => p.x > 0 && p.z > 0);
+  MINI.cad = {
+    items, xf: edf.filter((e) => e.p.x > 0).reduce((a, b) => a + b.p.x, 0) / 2, xr: edf.filter((e) => e.p.x < 0).reduce((a, b) => a + b.p.x, 0) / 2,
+    thrustArm: Math.abs(fl.p.z - hinge.z), podArm: Math.abs(podZ - hinge.z), podRadius: Math.hypot(podRoad.y - hingeR.y, podRoad.z - hingeR.z),
+    podCadM: podM, chassisY: MINI.data.meta.chassis_y, hingeY: hinge.y,
+  };
+  poseMini(MINI.conv, MINI.explode);
+}
+function protoModel(c) {
+  const e = EDFS[c.edf], esc = ESCS[c.esc], sv = SERVOS[c.servo], cad = MINI.cad;
+  const sleeve = e.od < .0975 ? .025 : 0;                      // printed adaptor sleeve for a smaller casing in the 98 mm duct ring
+  const packWh = c.S * 3.7 * c.mAh / 1000, packM = packWh * .0071 + .015, packVol = packWh * 2.68;
+  const over = { 'JDM-401': e.m + sleeve, 'JDM-402': esc.m, 'JDM-407': sv.m };
+  const pts = [], bat = cad.items.filter((it) => it.pn === 'JDM-403').sort((a, b) => a.p.y - b.p.y)[0];
+  for (let k = 0; k < c.packs; k++) pts.push([packM, bat.p.x + c.batX / 1000, bat.p.y + k * .041, bat.p.z]);   // packs stack on the tray
+  for (const it of cad.items) {
+    if (it.pn === 'JDM-403') continue;
+    pts.push([over[it.pn] ?? it.m, it.p.x, it.p.y, it.p.z]);
+  }
+  pts.push([c.misc, 0, cad.chassisY + .01, 0]);
+  const m = pts.reduce((a, b) => a + b[0], 0);
+  const cg = { x: pts.reduce((a, b) => a + b[0] * b[1], 0) / m, y: pts.reduce((a, b) => a + b[0] * b[2], 0) / m, z: pts.reduce((a, b) => a + b[0] * b[3], 0) / m };
+  const Iyaw = pts.reduce((a, b) => a + b[0] * ((b[1] - cg.x) ** 2 + (b[3] - cg.z) ** 2), 0);
+  const W = m * 9.81, kf = clamp((cg.x - cad.xr) / (cad.xf - cad.xr));
+  const Tf = W * kf / 2, Tr = W * (1 - kf) / 2;
+  // battery: open-circuit 3.85 V per cell at mid charge; resistance scales with capacity and C rating; 4 mΩ of wiring and connectors
+  const Ah = c.mAh / 1000 * c.packs, Rpack = c.S * .003 * (5000 / c.mAh) * Math.sqrt(60 / c.C) / c.packs + .004, Voc = c.S * 3.85, Vr = e.S * 3.7;
+  // fixed-pitch fan: thrust ∝ rpm², power ∝ rpm³, so at a fixed voltage I ∝ T^1.5; full-throttle thrust ∝ V², current ∝ V²
+  const op = (Tlist) => {
+    let V = Voc, out = null;
+    for (let k = 0; k < 40; k++) {
+      const s = V / Vr, Tmax = e.T * 9.81 * c.kInst * s * s, Imax = e.A * s * s;
+      const per = Tlist.map((T) => { const x = T == null ? 1 : Math.min(1, T / Tmax); return { x, I: Imax * x ** 1.5, sat: T != null && T > Tmax }; });
+      const I = per.reduce((a, b) => a + b.I, 0) + 1.5;    // + flight controller, receiver, GNSS and servo holding current
+      const Vn = Math.max(.6 * Voc, Voc - I * Rpack);
+      out = { V: Vn, I, per, Tmax, Imax };
+      if (Math.abs(Vn - V) < 1e-5) break;
+      V = .5 * (V + Vn);
+    }
+    return out;
+  };
+  const hv = op([Tf, Tf, Tr, Tr]), full = op([null, null, null, null]);
+  const twr = 4 * full.Tmax / W, xMax = Math.max(...hv.per.map((p) => p.x));
+  const hoverMin = c.usable * Ah / hv.I * 60;
+  const podM = cad.podCadM - .42 + e.m + sleeve;
+  const conv = podM * cad.podRadius * 100;                                   // kg·cm, worst case (pod arm horizontal)
+  const holdHover = Math.abs(Math.max(Tf, Tr) / 9.81 * cad.thrustArm - podM * cad.podArm) * 100;
+  const holdFull = Math.abs(full.Tmax / 9.81 * cad.thrustArm - podM * cad.podArm) * 100;
+  const dYaw = rad(5), Myaw = 2 * Tf * Math.sin(dYaw) * (cad.xf - cg.x) + 2 * Tr * Math.sin(dYaw) * (cg.x - cad.xr), aYaw = Myaw / Iyaw;
+  const Df = e.od - .008, Afan = Math.PI / 4 * (Df * Df - (.4 * Df) ** 2), dl = W / (4 * Afan);
+  return { e, esc, sv, m, W, cg, kf, Tf, Tr, hv, full, twr, xMax, hoverMin, Ah, packWh, packM, packVol, sleeve, podM, conv, holdHover, holdFull, Myaw, aYaw, Iyaw, dl, Afan, Rpack, Voc };
+}
+function protoChecks(c, M) {
+  const k = (ok, mid) => (ok ? 'ok' : mid ? 'mid' : 'bad'), cad = MINI.cad;
+  const dx = (M.cg.x - (cad.xf + cad.xr) / 2) * 1000, Ipack = M.full.I / M.Ah, Ihv = M.hv.I / M.Ah;
+  return [
+    ['Fan fits the pod duct ring', `${fmt(M.e.od * 1000, 0)} mm casing`, '≤ 98 mm bore', k(M.e.od <= .0985 && !M.sleeve, M.e.od <= .0985), M.sleeve ? `Smaller casing: print a ${fmt((.0984 - M.e.od) / 2 * 1000, 1)} mm-wall adaptor sleeve (adds ${fmt(M.sleeve * 4000, 0)} g) and expect extra inlet loss.` : 'The duct ring is CADed around a 98 mm casing with a 0.4 mm clamp gap.'],
+    ['Cells vs fan rating', `${c.S}S on a ${M.e.S}S fan`, `= ${M.e.S}S`, k(c.S === M.e.S, c.S < M.e.S), c.S > M.e.S ? 'Over-volting spins the fan past its rated speed: motor and rotor can fail. Do not fly.' : c.S < M.e.S ? 'Under-volting is safe but thrust falls with the square of voltage.' : 'Matches the fan’s rated voltage.'],
+    ['Thrust-to-weight (full throttle, sagged)', `${fmt(M.twr, 2)} : 1`, '≥ 2.0 (≥ 1.6 marginal)', k(M.twr >= 2, M.twr >= 1.6), `${fmt(4 * M.full.Tmax / 9.81, 2)} kg of thrust at ${fmt(M.full.V, 1)} V for ${fmt(M.m, 2)} kg. Below about 1.6 there is no margin to hold attitude in wind.`],
+    ['Hover throttle, most-loaded fan', `${fmt(M.xMax * 100, 0)} % of max thrust`, '≤ 55 % (≤ 70 % marginal)', k(M.xMax <= .55, M.xMax <= .7), `Front / rear thrust split ${fmt(M.kf * 100, 0)} / ${fmt((1 - M.kf) * 100, 0)} % from the CG.`],
+    ['Hover time', `${fmt(M.hoverMin, 1)} min`, '≥ 3 min (≥ 2 marginal)', k(M.hoverMin >= 3, M.hoverMin >= 2), `${fmt(M.hv.I, 0)} A total in hover from ${fmt(M.Ah, 1)} Ah, landing with ${fmt((1 - c.usable) * 100, 0)} % left. Ducted fans trade endurance for compactness.`],
+    ['Battery current at full throttle', `${fmt(Ipack, 0)}C (${fmt(M.full.I, 0)} A)`, `≤ ${c.C}C rating`, k(Ipack <= c.C * .8, Ipack <= c.C), `Hover draws ${fmt(Ihv, 0)}C. Real packs deliver well under their label, hence the 80 % target.`],
+    ['Voltage sag at full throttle', `${fmt(M.full.V / c.S, 2)} V per cell`, '≥ 3.4 V (≥ 3.2 marginal)', k(M.full.V / c.S >= 3.4, M.full.V / c.S >= 3.2), `Pack resistance ${fmt(M.Rpack * 1000, 0)} mΩ including wiring.`],
+    ['ESC current, full throttle', `${fmt(M.full.Imax, 0)} A per fan`, `≤ 85 % of ${M.esc.A} A`, k(M.full.Imax <= .85 * M.esc.A, M.full.Imax <= M.esc.A), 'Fan current at full throttle and sagged voltage.'],
+    ['Battery fits the tray and body', `${fmt(M.packVol * c.packs, 0)} cm³`, '≤ 620 cm³', k(M.packVol * c.packs <= 620, M.packVol * c.packs <= 720), `${c.packs} × ${c.S}S ${c.mAh} mAh, about ${fmt(M.packM * 1000, 0)} g each. The tray is 170 × 60 mm with about 60 mm of height under the shell.`],
+    ['CG over the thrust centre (fore-aft)', `${fmt(dx, 0)} mm ${dx >= 0 ? 'forward' : 'aft'}`, '≤ 8 mm (≤ 20 marginal)', k(Math.abs(dx) <= 8, Math.abs(dx) <= 20), `Slide the battery to move it: about ${fmt(M.packM * c.packs / M.m, 2)} mm of CG per mm of battery travel.`],
+    ['CG lateral', `${fmt(M.cg.z * 1000, 1)} mm`, '≤ 3 mm', k(Math.abs(M.cg.z) <= .003, Math.abs(M.cg.z) <= .006), 'Mirror-image layout; route wiring to keep it centred.'],
+    ['Servo torque, pod swing', `${fmt(M.conv, 1)} kg·cm`, `≤ ½ of ${M.sv.tq} kg·cm`, k(M.conv <= M.sv.tq / 2, M.conv <= M.sv.tq / 1.3), `Pod mass ${fmt(M.podM * 1000, 0)} g at ${fmt(MINI.cad.podRadius * 1000, 0)} mm from the hinge, worst case. Convert on the ground with the fans stopped.`],
+    ['Servo holding torque, full thrust', `${fmt(M.holdFull, 1)} kg·cm`, `≤ 70 % of ${M.sv.tq} kg·cm`, k(M.holdFull <= .7 * M.sv.tq, M.holdFull <= M.sv.tq), `In flight the thrust line sits ${fmt(MINI.cad.thrustArm * 1000, 0)} mm outboard of the hinge, so the servo holds thrust × offset minus pod weight × ${fmt(MINI.cad.podArm * 1000, 0)} mm. Hover: ${fmt(M.holdHover, 1)} kg·cm.`],
+    ['Yaw authority (±5° differential pod tilt)', `${fmt(M.aYaw, 1)} rad/s²`, '≥ 3 (≥ 1.5 marginal)', k(M.aYaw >= 3, M.aYaw >= 1.5), `EDF stators cancel most fan torque, so yaw comes from tilting front and rear pods opposite ways: ${fmt(M.Myaw, 2)} N·m on ${fmt(M.Iyaw * 1000, 0)} g·m².`],
+    ['Registration', `${fmt(M.m, 2)} kg`, 'over 250 g', 'ok', 'Register it with your aviation authority (FAA in the US) before flying outdoors, and fly within recreational rules.'],
+  ];
+}
+// --- build steps: each adds parts; the viewer shows parts up to the current step and highlights the new ones
+const PRINTED = (p) => p.spec && p.spec.print;
+const PROTO_STEPS = [
+  { t: 'Overview', time: '', add: [], all: true, pose: null,
+    what: 'The finished miniature: the scaled Rev 08.1 body on a carbon chassis plate, four wheel pods that each hold a ducted fan, and a servo-driven hinge above every tyre. Use Next to build it part by part.',
+    doIt: ['Pick your parts in the configurator below; every check updates. The defaults are the CADed build.', 'Download the STL / STEP files from the print list.', 'Budget a weekend for printing and a weekend for assembly and setup.'], check: '' },
+  { t: 'Print and cut the parts', time: 'print', add: [], preview: true, pose: null,
+    what: 'Every orange part is made by you: printed in LW-PLA, PETG, TPU or clear PETG, plus one carbon plate.',
+    doIt: ['Body sections (JDM-101 to 103): LW-PLA at about 240 °C so it foams; 2 perimeters, no infill. Sand and paint after assembly.',
+      'Hinge masts, blocks, arms and duct rings: PETG (or CF-nylon for the masts and arms). Print the duct rings lip-up without supports.',
+      'Tyre rings: TPU 95A, 3 perimeters. Canopy: clear PETG in vase mode, or thermoform over a printed buck.',
+      'Chassis plate: send the JDM-201 STEP outline to a CNC plate service, or cut 2 mm carbon with a diamond blade and a dust mask.',
+      'Print one RH and one LH of each handed part (the -LH files).'],
+    check: 'Test-fit a 608 bearing in a hinge block and the fan casing in a duct ring before printing the rest.' },
+  { t: 'Chassis plate, legs and trays', time: '40 min', add: ['JDM-201', 'JDM-202', 'JDM-203', 'JDM-204'], pose: 0,
+    what: 'The 2 mm carbon plate is the backbone. Everything that carries load bolts to it; the body shell carries none.',
+    doIt: ['Melt M3 heat-set inserts into the legs, battery tray and flight-controller plate.', 'Bolt the four legs under the plate at the outer leg holes (M3 × 10).',
+      'Bolt the battery tray on top, centred, and the FC plate ahead of it on the four standoff holes using 10 mm nylon standoffs.'],
+    check: 'The plate sits level on its legs on a flat table.' },
+  { t: 'Hinge masts and hinge blocks', time: '40 min', add: ['JDM-209', 'JDM-205', 'JDM-410'], pose: 0,
+    what: 'Each mast lifts a hinge block 90 mm above the plate so the pod can swing up and out over the tyre.',
+    doIt: ['Press two 608 bearings into each hinge block (warm the block if they are tight).', 'Glue each block onto its mast’s top flange with epoxy and add two M3 screws.',
+      'Bolt each mast foot to the plate edge with two M3 × 12 through the mast holes. Masts face outboard.'],
+    check: 'The four bearing bores line up front-to-back with a straight 8 mm rod.' },
+  { t: 'Swing arms, hinge shafts and servos', time: '1 h', add: ['JDM-208', 'JDM-411', 'JDM-407'], pose: .5,
+    what: 'The swing arm is the miniature conversion yoke: it turns on an 8 mm shaft in the two bearings and carries the pod.',
+    doIt: ['Slide the 8 mm shaft through the bearings and the arm; lock it with a grub screw on the flat.', 'Mount each servo beside its hinge block and link the horn to the arm (1 : 1, ball links).',
+      'Before linking, centre each servo with a tester and set the travel so 0° is road and 90° is flight.'],
+    check: 'Each arm swings 0–90° by hand with no binding and no slop at the shaft.' },
+  { t: 'Pods: duct ring, fan and tyre', time: '1 h', add: ['JDM-206', 'JDM-401', 'JDM-207'], pose: 0,
+    what: 'Each pod is a printed duct ring around a 90 mm ducted fan, with a TPU tyre stretched over the outer band.',
+    doIt: ['Slide the fan into the duct ring from the exhaust side so the inlet sits behind the bell-mouth lip; clamp with the two M3 pinch bolts.',
+      'Stretch the TPU tyre ring over the band (warm it in hot water first).', 'Bolt each pod to its swing arm at the servo-arm boss; run the three motor wires along the arm with a loop at the hinge.'],
+    check: 'Spin each fan by hand: no rubbing. Swing each pod 0–90°: the wires don’t pull tight.' },
+  { t: 'Power and electronics', time: '2 h', add: ['JDM-402', 'JDM-408', 'JDM-409', 'JDM-404', 'JDM-405', 'JDM-406'], pose: 0,
+    what: 'Two packs in parallel feed a distribution board, four ESCs and a separate servo BEC; the flight controller runs everything. One pack sags too far at full throttle (see the checks).',
+    doIt: ['Solder the PDB: XT90 input, four ESC pads, a 5 V feed to the flight controller and the BEC input.', 'Mount the ESCs on the plate near their pods; solder motor wires (swap two to reverse a fan).',
+      'Wire ESC signals to FC outputs 1–4 (front-right, rear-left, front-left, rear-right) and servos to outputs 5–8. Power the servos from the BEC, not the FC.',
+      'Mount the GNSS on the roof mast, arrow forward. Receiver on a UART; antennas out of the carbon’s shadow.'],
+    check: 'Smoke-stopper first power-up with no fans connected. The FC boots and the servos centre.' },
+  { t: 'Battery and centre of gravity', time: '20 min', add: ['JDM-403'], pose: 1,
+    what: 'With the pods in flight position, the CG must sit over the centre of the four fans.',
+    doIt: ['Stack the two packs on the tray, join them with an XT90 parallel lead and strap them down with two velcro straps. Only parallel packs at the same voltage (within 0.05 V per cell).', 'Set the pods to 90°. Balance the model on two fingertips under the front and rear fan centres.',
+      'Slide the battery until it balances; mark the position on the tray. The configurator shows the predicted spot.'],
+    check: 'CG within 8 mm of the fan centre fore-aft and 3 mm side-to-side (see the checks table).' },
+  { t: 'Body shell and canopy', time: '1.5 h', add: ['JDM-101', 'JDM-102', 'JDM-103', 'JDM-104'], pose: 0,
+    what: 'The three body sections and canopy are cosmetic and aerodynamic. They clip over the frame with magnets so you can reach the battery.',
+    doIt: ['Glue the canopy into the middle section.', 'Glue 6 × 3 mm magnets in the section joints and matching ones on the masts.',
+      'Check the pod pockets: each pod must swing 0–90° without touching the shell. Trim if needed.'],
+    check: 'Run the conversion with the shell on: no contact anywhere.' },
+  { t: 'Set up and test conversion', time: '2 h', add: [], all: true, pose: 'anim',
+    what: 'Set up ArduPilot, then prove the conversion logic on the bench with the fans unpowered.',
+    doIt: ['Flash ArduCopter. Frame: Quad X. Calibrate accelerometers, compass and radio. Set the ESC protocol to DShot.',
+      'Add a short Lua script: a switch slews all four pod servos 0° ↔ 90° over 2 s and blocks arming unless all pods are at 90°.',
+      'Map yaw to differential pod tilt in the same script (±5°, front pair opposite the rear pair) and turn down the motors’ own yaw mixing; EDF stators make fan-torque yaw weak.',
+      'Set a battery failsafe (land at 3.5 V per cell), a radio failsafe (land) and a geofence.'],
+    check: 'Pods convert both ways on the switch. Arming refuses in road position. Tilting the model makes the motors respond correctly in the motor-test page.' },
+  { t: 'First hover', time: '', add: [], all: true, pose: 1,
+    what: 'Tethered first, then free hover in an open field. Ducted fans are dangerous: treat them like spinning blades.',
+    doIt: ['Tie the model to two ground stakes with 1 m lines. Safety glasses on; stand 5 m back; keep hands out of the inlets.',
+      'Arm in Stabilize, raise throttle slowly to light on the skids, check that it doesn’t try to flip or yaw. Fix motor order or direction if it does.',
+      'Untethered: hover at 1 m for 30 s, land, check temperatures and the pack voltage. Then tune (AutoTune on roll and pitch) and only then try a slow forward flight.'],
+    check: 'Stable hover with the throttle near the predicted hover point. Land when the timer reaches the predicted hover time minus one minute.' },
+];
+function initProto() {
+  const v = makeView('prototype', 'proto-viewport', [.52, .3, .58], [0, .08, 0]);
+  v.controls.minDistance = .25; v.controls.maxDistance = 4;
+  MINI.cfg = { ...PROTO_DEFAULT };
+  $('proto-conv').addEventListener('input', (e) => { MINI.anim = null; MINI.conv = +e.target.value; poseMini(MINI.conv, MINI.explode); labelConv(); });
+  $('proto-explode').addEventListener('input', (e) => { MINI.explode = +e.target.value; poseMini(MINI.conv, MINI.explode); });
+  $('proto-shell').addEventListener('change', (e) => { MINI.shell = e.target.checked; applyStep(); });
+  $('proto-reset').addEventListener('click', () => { v.camera.position.set(.52, .3, .58); v.controls.target.set(0, .08, 0); });
+  $('proto-prev').addEventListener('click', () => setStep(MINI.step - 1));
+  $('proto-next').addEventListener('click', () => setStep(MINI.step + 1));
+  $('proto-step-list').innerHTML = PROTO_STEPS.map((s, i) => `<li><button data-pstep="${i}"><span>${String(i).padStart(2, '0')}</span>${esc(s.t)}</button></li>`).join('');
+  $('proto-step-list').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => setStep(+b.dataset.pstep)));
+  renderProtoInputs(); setStep(0); renderProto();
+}
+function labelConv() { $('proto-conv').value = MINI.conv; $('proto-conv-label').textContent = MINI.conv < .02 ? 'Road' : MINI.conv > .98 ? 'Flight' : `${fmt(MINI.conv * 90, 0)}°`; }
+function setStep(i) {
+  MINI.step = clamp(i, 0, PROTO_STEPS.length - 1);
+  const s = PROTO_STEPS[MINI.step];
+  MINI.anim = s.pose === 'anim' ? { t: 0 } : null;
+  if (typeof s.pose === 'number') { MINI.conv = s.pose; poseMini(MINI.conv, MINI.explode); labelConv(); }
+  $('proto-step-code').textContent = `STEP ${MINI.step} / ${PROTO_STEPS.length - 1}`;
+  $('proto-prev').disabled = MINI.step === 0; $('proto-next').disabled = MINI.step === PROTO_STEPS.length - 1;
+  $('proto-step-list').querySelectorAll('button').forEach((b, k) => { b.classList.toggle('active', k === MINI.step); b.classList.toggle('done', k < MINI.step); });
+  const parts = [...new Set(s.add)].map((pn) => MINI.data.parts.find((p) => p.pn === pn)).filter(Boolean);
+  const list = s.preview ? MINI.data.parts.filter(PRINTED) : parts;
+  const time = s.time === 'print' ? `≈ ${fmt(printHours(), 0)} h of printing` : s.time;
+  $('proto-step').innerHTML = `<span class="eyebrow">STEP ${MINI.step}${time ? ' · ' + esc(time.toUpperCase()) : ''}</span><h3>${esc(s.t)}</h3><p>${esc(s.what)}</p>
+    <ol>${s.doIt.map((d) => `<li>${esc(d)}</li>`).join('')}</ol>${s.check ? `<p class="proto-check"><b>Check before moving on.</b> ${esc(s.check)}</p>` : ''}
+    ${list.length ? `<div class="proto-parts">${list.map((p) => `<span><b>${esc(p.pn)}</b> ${esc(p.name)} × ${p.qty}</span>`).join('')}</div>` : ''}`;
+  applyStep();
+}
+function applyStep() {
+  const s = PROTO_STEPS[MINI.step], shown = new Set(), hot = new Set(s.add);
+  if (s.all) for (const r of MINI.recs) shown.add(r.pn);
+  else if (s.preview) for (const r of MINI.recs) { if (PRINTED(r.p)) { shown.add(r.pn); hot.add(r.pn); } }
+  else for (let k = 0; k <= MINI.step; k++) PROTO_STEPS[k].add.forEach((pn) => shown.add(pn));
+  if (MINI.step === 0) for (const r of MINI.recs) shown.add(r.pn);
+  for (const r of MINI.recs) {
+    const body = r.p.system.startsWith('M10');
+    r.holder.visible = shown.has(r.pn) && (MINI.shell || !body || hot.has(r.pn));
+    r.me.material = hot.has(r.pn) ? MINI.hot : r.base;
+  }
+}
+function tickProto(dt) {
+  if (!MINI.anim) return;
+  MINI.anim.t += dt;
+  const ph = MINI.anim.t % 7;            // road 1 s → 2 s swing up → 1.5 s flight → 2 s swing down → 0.5 s
+  MINI.conv = ph < 1 ? 0 : ph < 3 ? smooth((ph - 1) / 2) : ph < 4.5 ? 1 : ph < 6.5 ? 1 - smooth((ph - 4.5) / 2) : 0;
+  poseMini(MINI.conv, MINI.explode); labelConv();
+}
+function renderProtoInputs() {
+  const C = MINI.cfg;
+  $('proto-inputs').innerHTML = PROTO_INPUTS.map(([g, list]) => `<h4>${g.toUpperCase()}</h4>` + list.map(([k, l, u, a, b, s]) => u === 'sel'
+    ? `<label class="fin" for="pin-${k}">${l}<select id="pin-${k}" data-k="${k}">${a.map((o, i) => `<option value="${o.v ?? i}" ${(o.v ?? i) === C[k] ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label>`
+    : `<label class="fin" for="pin-${k}">${l}<output id="pout-${k}"></output><input id="pin-${k}" type="range" min="${a}" max="${b}" step="${s}" value="${C[k]}" data-k="${k}"></label>`).join('')).join('') +
+    `<button class="tl-btn" id="pin-reset">Reset to the CADed build</button>`;
+  $('proto-inputs').querySelectorAll('input, select').forEach((i) => i.addEventListener('input', () => { C[i.dataset.k] = +i.value; renderProto(); }));
+  $('pin-reset').addEventListener('click', () => { MINI.cfg = { ...PROTO_DEFAULT }; renderProtoInputs(); renderProto(); });
+}
+function protoCost(c, M) {
+  const rows = [], add = (grp, pn, name, qty, unit, note = '') => rows.push({ grp, pn, name, qty, unit, total: qty * unit, note });
+  for (const p of MINI.data.parts) {
+    if (p.supplier === 'buy') continue;
+    if (p.material === 'cf_plate') continue;   // costed with the plate blank in the extras
+    const f = FIL[p.material] || FIL.petg, g = p.mass_kg * 1000 * p.qty * 1.15;
+    add('Printed', p.pn, `${p.name} (${f[0]}, ${fmt(g, 0)} g incl. waste)`, 1, g / 1000 * f[1], `${fmt(g / f[2], 1)} h`);
+  }
+  for (const p of MINI.data.parts.filter((q) => q.supplier === 'buy')) {
+    if (p.pn === 'JDM-401') add('Purchased', p.pn, M.e.label.replace(' (CADed)', '') + ' ducted fan unit', 4, M.e.price);
+    else if (p.pn === 'JDM-402') add('Purchased', p.pn, `${M.esc.A} A ESC, BLHeli_32 / AM32`, 4, M.esc.price);
+    else if (p.pn === 'JDM-403') add('Purchased', p.pn, `${c.S}S ${c.mAh} mAh ${c.C}C LiPo`, c.packs, Math.round(.75 * M.packWh + 10));
+    else if (p.pn === 'JDM-407') add('Purchased', p.pn, `${M.sv.tq} kg·cm metal-gear digital servo`, 4, M.sv.price);
+    else add('Purchased', p.pn, p.name, p.qty, BUY[p.pn] ?? 10);
+  }
+  if (M.sleeve) add('Printed', 'JDM-206A', 'Fan adaptor sleeve (PETG)', 4, .5);
+  for (const [n, q, u] of EXTRAS) add('Hardware', '', n, q, u);
+  for (const [n, q, u] of TOOLS) add('If you don’t own them', '', n, q, u);
+  return rows;
+}
+function printHours() { return MINI.data.parts.filter((p) => PRINTED(p) && FIL[p.material]).reduce((a, p) => a + p.mass_kg * 1000 * p.qty * 1.15 / FIL[p.material][2], 0); }
+function renderProto() {
+  if (!MINI.cad) return;
+  const c = MINI.cfg, M = protoModel(c);
+  for (const g of PROTO_INPUTS) for (const [k, , u, , , s] of g[1]) { const o = $('pout-' + k); if (o) o.textContent = `${fmt(c[k], s >= 1 ? 0 : 2)}${u ? ' ' + u : ''}`; }
+  const checks = protoChecks(c, M), nBad = checks.filter((x) => x[3] === 'bad').length, nMid = checks.filter((x) => x[3] === 'mid').length;
+  const rows = protoCost(c, M), build = rows.filter((r) => r.grp !== 'If you don’t own them').reduce((a, b) => a + b.total, 0), tools = rows.filter((r) => r.grp === 'If you don’t own them').reduce((a, b) => a + b.total, 0);
+  const printH = printHours();
+  const st = (v, a, b) => (v >= a ? 'ok' : v >= b ? 'mid' : 'bad');
+  $('proto-kpis').innerHTML = [
+    ['PHYSICS CHECKS', `${checks.length - nBad - nMid} / ${checks.length} pass`, `${nMid} marginal · ${nBad} failing`, nBad ? 'bad' : nMid ? 'mid' : 'ok'],
+    ['ALL-UP MASS', `${fmt(M.m, 2)} kg`, `CAD roll-up + ${fmt(c.misc * 1000, 0)} g wiring`, ''],
+    ['THRUST / WEIGHT', `${fmt(M.twr, 2)} : 1`, `${fmt(4 * M.full.Tmax / 9.81, 1)} kg thrust`, st(M.twr, 2, 1.6)],
+    ['HOVER TIME', `${fmt(M.hoverMin, 1)} min`, `${fmt(M.hv.I, 0)} A at ${fmt(M.hv.V, 1)} V`, st(M.hoverMin, 3, 2)],
+    ['HOVER POWER', `${fmt(M.hv.I * M.hv.V, 0)} W`, `${fmt(M.m * 1000 / (M.hv.I * M.hv.V), 2)} g/W`, ''],
+    ['BUILD COST', `$${fmt(build, 0)}`, `+ $${fmt(tools, 0)} radio & charger if needed`, ''],
+    ['PRINT TIME', `${fmt(printH, 0)} h`, 'one 0.4 mm FDM printer', ''],
+    ['DISK LOADING', `${fmt(M.dl, 0)} Pa`, `full-size car: ${fmt(flightModel(FLIGHT).dl, 0)} Pa`, ''],
+  ].map(([k, v, s, cl]) => `<div class="kpi ${cl}"><small>${k}</small><b>${v}</b><span>${s}</span></div>`).join('') +
+    `<div class="checks"><table class="checks-table"><thead><tr><th>Check</th><th>Value</th><th>Limit</th><th>Status</th><th>Why it matters</th></tr></thead><tbody>${checks.map(([n, v, l, s, w]) =>
+      `<tr class="${s}"><td>${esc(n)}</td><td class="num">${esc(v)}</td><td>${esc(l)}</td><td><span class="pill ${s}">${s === 'ok' ? '● Pass' : s === 'mid' ? '▲ Marginal' : '■ Fail'}</span></td><td>${esc(w)}</td></tr>`).join('')}</tbody></table></div>`;
+  const STL = REPO.replace('/blob/', '/raw/') + 'cad/mini/stl/', STEP = REPO.replace('/blob/', '/raw/') + 'cad/mini/step/';
+  const printed = MINI.data.parts.filter(PRINTED);
+  const grp = (g) => rows.filter((r) => r.grp === g);
+  const table = (list) => list.map((r) => `<tr><td class="pn">${esc(r.pn)}</td><td>${esc(r.name)}</td><td class="num">${r.qty}</td><td class="num">$${fmt(r.unit, r.unit < 10 ? 2 : 0)}</td><td class="num">$${fmt(r.total, 0)}</td></tr>`).join('');
+  const groupSum = (g) => grp(g).reduce((a, b) => a + b.total, 0);
+  const full = MINI.data.meta, S = full.scale;
+  $('proto-sections').innerHTML = `
+    <article class="chart-card"><span class="ref">cad/mini · ${printed.length} made parts · STL for printing, STEP for editing</span><h4>Print and cut list</h4>
+      <div class="proto-table"><table class="bom-table"><thead><tr><th>Part</th><th>Name</th><th>Qty</th><th>Material and settings</th><th>Mass each</th><th>Files</th></tr></thead><tbody>${printed.map((p) =>
+        `<tr><td class="pn">${esc(p.pn)}</td><td>${esc(p.name)}</td><td class="num">${p.qty}${p.handed ? ' (2 RH + 2 LH)' : ''}</td><td>${esc(p.spec.printer || p.spec.cut || '')}</td><td class="num">${fmt(p.mass_kg * 1000, 0)} g</td>
+        <td><a href="${STL}${p.pn}.stl" target="_blank" rel="noopener">STL</a>${p.handed ? ` · <a href="${STL}${p.pn}-LH.stl" target="_blank" rel="noopener">LH</a>` : ''} · <a href="${STEP}${p.pn}.step" target="_blank" rel="noopener">STEP</a></td></tr>`).join('')}</tbody></table></div>
+      <p>Full assembly: <a href="${REPO.replace('/blob/', '/raw/')}cad/mini/Joukowsky-Dynamics-mini-prototype-assembly.step.zip" target="_blank" rel="noopener">assembly STEP (zip)</a> · <a href="${REPO}cad/mini/Joukowsky-Dynamics-mini-prototype-BOM.csv" target="_blank" rel="noopener">BOM CSV</a>. Masses are CAD volumes at the stated effective densities.</p></article>
+    <article class="chart-card"><span class="ref">prices are typical 2026 hobby-shop figures in USD · your configuration</span><h4>Parts list and cost</h4>
+      <div class="bom-summary"><span>Build <b>$${fmt(build, 0)}</b></span><span>Printed <b>$${fmt(groupSum('Printed'), 0)}</b></span><span>Purchased <b>$${fmt(groupSum('Purchased'), 0)}</b></span><span>Hardware <b>$${fmt(groupSum('Hardware'), 0)}</b></span><span>Radio, charger, bag <b>$${fmt(tools, 0)}</b></span></div>
+      <div class="proto-table"><table class="bom-table"><thead><tr><th>Part</th><th>Item</th><th>Qty</th><th>Unit</th><th>Total</th></tr></thead><tbody>
+        ${['Purchased', 'Printed', 'Hardware', 'If you don’t own them'].map((g) => `<tr class="grp"><td colspan="5">${esc(g.toUpperCase())}</td></tr>${table(grp(g))}`).join('')}</tbody></table></div></article>
+    <article class="chart-card"><span class="ref">battery packs in parallel · one PDB · four ESCs · servo BEC · ArduPilot flight controller</span><h4>Wiring diagram</h4>${wiringSvg(c, M)}
+      <p>Motor outputs follow ArduPilot Quad X order: 1 front-right, 2 rear-left, 3 front-left, 4 rear-right. Servos take outputs 5–8 but their power comes from the BEC, because four servos holding against thrust can draw more than a flight controller’s 5 V rail can give. Leave a loop in each motor lead where it crosses the hinge.</p></article>
+    <div class="flight-notes">
+      <div><h4>What the miniature proves</h4><ul>
+        <li>The pod swing: hinge position, clearances to the body and tyre, and the actuator torque, with the full-size layout.</li>
+        <li>That four pods in their flight position can hover the car body, with the CG over the thrust centre and the battery where the configurator predicts.</li>
+        <li>Vectored yaw by differential pod tilt, which the full-size car also needs because its ducts have stator vanes.</li>
+        <li>The conversion logic: arming locked out until all four pods report flight position.</li></ul></div>
+      <div><h4>What it does not prove</h4><ul>
+        <li>Road driving: the tyre rings are fixed to the ducts, so the miniature rolls on its pods only when pushed. The full-size wheel drive is not scaled.</li>
+        <li>Proprotor aerodynamics: off-the-shelf fans are fixed-pitch, so the NASA-memo blade design, collective trim and petal diffuser are not tested.</li>
+        <li>Dynamics at full scale: Froude scaling at 1 : ${fmt(1 / S, 1)} would need ${fmt(2249 * S ** 3, 2)} kg; this build is ${fmt(M.m / (2249 * S ** 3), 1)} × heavier, so time scales and gust response do not carry over directly.</li>
+        <li>Battery heat, crash safety and the parachute.</li></ul></div>
+      <div><h4>Scale data</h4><table class="alloc">
+        <tr><th></th><th>Full size</th><th>Miniature</th></tr>
+        <tr><th>Length scale</th><td>1</td><td>1 : ${fmt(1 / S, 1)}</td></tr>
+        <tr><th>Wheelbase</th><td>${fmt(full.wheelbase / S * 1000, 0)} mm</td><td>${fmt(full.wheelbase * 1000, 0)} mm</td></tr>
+        <tr><th>Track</th><td>${fmt((full.track - .024) / S * 1000, 0)} mm</td><td>${fmt(full.track * 1000, 0)} mm</td></tr>
+        <tr><th>Tyre radius</th><td>740 mm</td><td>${fmt(full.tire_R * 1000, 1)} mm</td></tr>
+        <tr><th>Mass</th><td>2,249 kg</td><td>${fmt(M.m, 2)} kg</td></tr>
+        <tr><th>Disk loading</th><td>${fmt(flightModel(FLIGHT).dl, 0)} Pa</td><td>${fmt(M.dl, 0)} Pa</td></tr>
+        <tr><th>Conversion time</th><td>6 s</td><td>2 s (Froude ${fmt(6 * Math.sqrt(S), 1)} s)</td></tr></table>
+        <p>Pods are about 2.5 × deeper than scale so a ducted fan fits; the pockets in the body are cut deeper to match.</p></div>
+    </div>`;
+}
+function wiringSvg(c, M) {
+  const box = (x, y, w, h, t, s, cl = '') => `<g class="wb ${cl}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="3"/><text x="${x + w / 2}" y="${y + h / 2 - (s ? 3 : -4)}" text-anchor="middle" class="ttl">${t}</text>${s ? `<text x="${x + w / 2}" y="${y + h / 2 + 11}" text-anchor="middle">${s}</text>` : ''}</g>`;
+  const ln = (d, cl) => `<path d="${d}" class="${cl}" fill="none"/>`;
+  const Y = [20, 100, 180, 260];
+  let s = `<svg viewBox="0 0 760 350" class="wiring" role="img" aria-label="Wiring diagram: battery to PDB, four ESCs and fans, servo BEC, flight controller">`;
+  s += ln('M110 165 H170', 'pw') + Y.map((y) => ln(`M290 165 H330 V${y + 20} H380`, 'pw')).join('') + ln('M230 200 V260', 'pw');
+  s += Y.map((y) => ln(`M480 ${y + 20} H540`, 'ph')).join('');
+  s += Y.map((y, i) => ln(`M430 ${y + 40} V${y + 52} H625 V${150 + i * 12} H640`, 'sg')).join('');
+  s += ln('M260 130 V8 H620 V190 H640', 'lv') + ln('M290 282 H756 V40 H750', 'lv') + ln('M695 140 V60', 'sg') + ln('M695 200 V240', 'sg');
+  s += box(10, 140, 100, 50, `${c.S}S LiPo`, `${c.mAh} mAh × ${c.packs}`) + box(170, 130, 120, 70, 'PDB', 'XT90 · 4 ESC pads') + box(170, 260, 120, 44, 'Servo BEC', '7.4 V · 8 A');
+  ['FR · out 1', 'RL · out 2', 'FL · out 3', 'RR · out 4'].forEach((n, i) => { s += box(380, Y[i], 100, 40, 'ESC', `${n} · ${M.esc.A} A`) + box(540, Y[i], 70, 40, 'EDF', `${fmt(M.e.od * 1000 - 8, 0)} mm`); });
+  s += box(640, 140, 110, 60, 'Flight controller', 'ArduPilot H7', 'fc') + box(640, 20, 110, 40, '4 pod servos', `out 5–8 · ${M.sv.tq} kg·cm`) + box(640, 240, 110, 40, 'GNSS · receiver', 'UART');
+  s += `<g class="wl"><path d="M10 334 H34" class="pw"/><text x="40" y="338">battery power</text><path d="M150 334 H174" class="lv"/><text x="180" y="338">5–7.4 V</text>
+    <path d="M260 334 H284" class="sg"/><text x="290" y="338">signal</text><path d="M350 334 H374" class="ph"/><text x="380" y="338">3-phase motor</text></g></svg>`;
+  return s;
+}
+
+// open the remembered tab, or a deep link (#sequence / #advanced / #flight / #prototype)
 const deep = location.hash.replace('#', '');
 const startTab = MY_TABS[deep] ? deep : MY_TABS[document.body.dataset.startTab] ? document.body.dataset.startTab : null;
 if (startTab) document.querySelector(`[data-tab="${startTab}"]`)?.click();
-window.__jd = { _dbg: { OBJS, PARTS, NODE }, focus: (v, id) => focusRegion(v, id), unfocus: () => exitFocus(true), seek: (t) => { seq.playing = false; seq.snap = true; syncPlay(); setSeqTime(t); }, style: (s) => document.querySelector(`[data-seqstyle="${s}"]`).click(), showTab, get DATA() { return DATA; }, MASS, flightModel: () => flightModel(FLIGHT) };
+window.__jd = { _dbg: { OBJS, PARTS, NODE }, focus: (v, id) => focusRegion(v, id), unfocus: () => exitFocus(true), seek: (t) => { seq.playing = false; seq.snap = true; syncPlay(); setSeqTime(t); }, style: (s) => document.querySelector(`[data-seqstyle="${s}"]`).click(), showTab, get DATA() { return DATA; }, MASS, flightModel: () => flightModel(FLIGHT), MINI, protoModel: () => protoModel(MINI.cfg), protoChecks: () => protoChecks(MINI.cfg, protoModel(MINI.cfg)), setStep: (i) => setStep(i) };

@@ -43,7 +43,7 @@
   <div class="mark">JOUKOWSKY<span>DYNAMICS</span></div>
   <p class="eyebrow">REV 08 · RESTRICTED ENGINEERING WORKBENCH</p>
   <h1>Enter the password to open the workbench</h1>
-  <p>The holographic sequence, the CAD blueprint and the flight analysis are encrypted until the password is entered.</p>
+  <p>The holographic sequence, the CAD blueprint, the flight analysis and the miniature prototype are encrypted until the password is entered.</p>
   <label for="pw">PASSWORD</label>
   <input id="pw" type="password" autocomplete="current-password" spellcheck="false" required autofocus>
   <button type="submit">UNLOCK</button>
@@ -73,7 +73,8 @@
   }
   function mount(files) {
     var td = new TextDecoder(), text = function (n) { return td.decode(files[n]); };
-    window.__JD_DATA = { parts: JSON.parse(text('advanced/data/parts.json')), meshes: files['advanced/data/meshes.bin'] };
+    window.__JD_DATA = { parts: JSON.parse(text('advanced/data/parts.json')), meshes: files['advanced/data/meshes.bin'],
+      mini: files['advanced/data/mini/parts.json'] ? { parts: JSON.parse(text('advanced/data/mini/parts.json')), meshes: files['advanced/data/mini/meshes.bin'] } : null };
     var doc = new DOMParser().parseFromString(text('index.html'), 'text/html');
     document.getElementById('gate-style').remove();
     document.title = doc.title;

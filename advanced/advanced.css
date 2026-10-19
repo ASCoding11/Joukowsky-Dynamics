@@ -218,3 +218,55 @@ input[type=range] { accent-color: var(--accent); }
 .region-brief.in-sheet { position: static; width: auto; inset: auto; backdrop-filter: none; background: #0b1d27; flex: none; overflow: visible; margin: -4px -4px 4px; }
 .adv-viewport.focused .region-chips { right: 16px; }
 .seq-stage .adv-viewport.focused .region-chips { right: 332px; }
+
+/* ---------- physics checks (tab 07) */
+.kpis .checks { grid-column: 1 / -1; background: var(--surface); overflow-x: auto; }
+.checks-table { border-collapse: collapse; width: 100%; font-size: var(--text-xs); }
+.checks-table th { text-align: left; font: 500 10px var(--font-mono); letter-spacing: 1px; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.checks-table td { padding: 7px 10px; border-bottom: 1px solid #b0e4ed12; color: #b9d3da; vertical-align: top; line-height: 1.45; }
+.checks-table td.num { font-family: var(--font-mono); color: var(--text); white-space: nowrap; }
+.pill { font: 10px var(--font-mono); letter-spacing: .5px; padding: 2px 7px; border: 1px solid; white-space: nowrap; }
+.pill.ok { color: var(--good); border-color: #5fbf7a66; }
+.pill.mid { color: var(--warn); border-color: #e3b04b66; }
+.pill.bad { color: var(--crit); border-color: #e0675a66; }
+
+/* ---------- 08 miniature prototype */
+.proto-top { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--space-5); min-height: 0; }
+.proto-stage { display: flex; flex-direction: column; border: 1px solid var(--line); min-width: 0; }
+.proto-stage .adv-viewport { flex: none; height: min(62vh, 620px); min-height: 320px; }
+.proto-steps { border: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; max-height: calc(min(62vh, 620px) + 54px); min-height: 0; }
+.proto-step-nav { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); font: var(--text-xs) var(--font-mono); color: var(--accent); letter-spacing: 1px; }
+.proto-step-nav .tl-btn:disabled { opacity: .35; cursor: default; }
+.proto-step-list { list-style: none; margin: 0; padding: 6px 0; display: flex; flex-direction: column; border-bottom: 1px solid var(--line); flex: none; max-height: 48%; overflow-y: auto; scrollbar-width: thin; }
+.proto-step-list button { width: 100%; text-align: left; display: flex; gap: 10px; align-items: baseline; padding: 3px 12px; background: none; border-left: 2px solid transparent; color: var(--muted); font-size: var(--text-xs); min-height: 24px; }
+.proto-step-list button span { font: 10px var(--font-mono); letter-spacing: 1px; }
+.proto-step-list button.done { color: #9fc5cf; }
+.proto-step-list button.active { color: var(--text); border-left-color: var(--accent); background: #6be1ed0c; }
+.proto-step-list button.active span { color: var(--accent); }
+.proto-step { padding: 12px 14px 16px; overflow-y: auto; scrollbar-width: thin; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.proto-step h3 { font-size: var(--text-base); font-weight: 500; margin: 0; }
+.proto-step p, .proto-step li { color: var(--muted); font-size: var(--text-xs); line-height: 1.55; margin: 0; }
+.proto-step ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.proto-step li::marker { color: var(--accent); font-family: var(--font-mono); }
+.proto-check { border-left: 2px solid var(--good); padding-left: 10px; }
+.proto-check b { color: var(--text); font-weight: 500; }
+.proto-parts { display: flex; flex-direction: column; gap: 3px; border-top: 1px solid var(--line); padding-top: 8px; }
+.proto-parts span { font-size: 11px; color: var(--muted); }
+.proto-parts b { font: 500 11px var(--font-mono); color: var(--amber-hot); margin-right: 6px; }
+.flight-inputs select { width: 100%; margin-top: 4px; background: #091923; color: var(--text); border: 1px solid var(--line); padding: 6px; font: var(--text-xs) var(--font-mono); min-height: 32px; }
+.proto-table { overflow-x: auto; max-height: 460px; overflow-y: auto; scrollbar-width: thin; }
+.proto-table .bom-table tr:hover td { cursor: default; }
+.proto-table .bom-table tr.grp td { font: 500 10px var(--font-mono); letter-spacing: 1.5px; color: var(--accent); padding-top: 12px; background: none; }
+.proto-table a, .chart-card p a { color: var(--accent); }
+.wiring .wb rect { fill: #0b1d27; stroke: #6be1ed55; }
+.wiring .wb.fc rect { stroke: var(--accent); }
+.wiring .pw { stroke: #e0675a; stroke-width: 2.2; }
+.wiring .lv { stroke: var(--s3); stroke-width: 1.6; }
+.wiring .sg { stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 4 3; }
+.wiring .ph { stroke: var(--s2); stroke-width: 2.6; }
+@media (max-width: 960px) {
+  .proto-top { grid-template-columns: 1fr; }
+  .proto-stage .adv-viewport { height: 58vh; }
+  .proto-steps { max-height: none; }
+  .proto-step-list { max-height: 220px; }
+}

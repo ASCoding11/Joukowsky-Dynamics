@@ -23,7 +23,7 @@ GROUND = -0.23
 WC_Y = 0.51                  # wheel-centre height
 WB = 1.80                    # half wheelbase
 TRACK = 1.18                 # half track (wheel centre plane)
-TIRE_R, RIM_R, DUCT_R = 0.74, 0.636, 0.556
+TIRE_R, RIM_R, DUCT_R = 0.74, 0.662, 0.600   # Rev 08.1: thinner tyre + rim, 17 % more rotor disk
 HINGE = (0.0, 0.78, -0.08)   # yoke hinge in the corner frame (above the tyre, axis X)
 CORNERS = {                  # name: (x, mirror, rotor hand, steer)
     'FL': (WB, False, 'R', True), 'FR': (WB, True, 'R', True),
@@ -178,7 +178,7 @@ def build_body():
     for pn, name, reg in BODY_PANELS:
         door = 'door outer' in name
         part(pn, name, '101 Body', 'Body panels', 'cfrp_paint', (lambda p=pn: body_panel(p)), world=True,
-             shell_t=0.0025, process='Prepreg CFRP, autoclave 135 °C, Class-A clear coat',
+             shell_t=0.0018, process='Prepreg CFRP, autoclave 135 °C, Class-A clear coat',
              fn='Aerodynamic / Class-A outer surface trimmed from the A1 lofted envelope',
              desc='Lofted through 21 stations sampled from the approved A1-road sculpted body, offset 22 mm '
                   'inboard to form the skin and trimmed at the panel break lines.')
@@ -519,8 +519,8 @@ def build_cockpit():
         place('JD-120-036', 'cockpit', (0.30, 0.90, z)); place('JD-120-036', 'cockpit', (0.55, 0.65, z))
 
 # ============================================================== 200 ENERGY STORAGE & POWER
-CELL_D, CELL_H, CELL_PITCH = 0.046, 0.080, 0.0485
-MOD_NX, MOD_NZ, MOD_LAYERS = 8, 7, 1
+CELL_D, CELL_H, CELL_PITCH = 0.021, 0.070, 0.0215   # high-power 21700 (12C continuous)
+MOD_NX, MOD_NZ, MOD_LAYERS = 18, 16, 1             # 288 cells = 12s24p per module
 def build_power():
     node('power', 'Energy storage & power electronics', 'vehicle', system='200')
     part('JD-200-001', 'Battery enclosure lower tray', '200 Energy storage', 'Pack enclosure', 'al6061',
@@ -532,10 +532,10 @@ def build_power():
     place('JD-200-001', 'power', (0, 0.29, 0)); place('JD-200-002', 'power', (0, 0.362, 0))
     part('JD-200-010', 'Battery module housing', '200 Energy storage', 'Battery modules', 'al6061',
          lambda: box(0.40, 0.105, 0.36).cut(box(0.392, 0.105, 0.352, (0, 0.004, 0))), process='Extruded / welded 6061')
-    part('JD-200-011', 'Li-ion cell, 4680 format', '200 Energy storage', 'Battery modules', 'cell',
-         lambda: union(cyl(CELL_D / 2, CELL_H - 0.003, 'y'), cyl(0.008, 0.003, 'y', (0, CELL_H / 2 - 0.0015 + 0.0015, 0))),
-         supplier='buy', mass=0.355, process='Purchased cylindrical cell, tabless',
-         spec=dict(nominal_V=3.6, capacity_Ah=26.0, energy_Wh=93.6, chemistry='NMC811 / Si-graphite'))
+    part('JD-200-011', 'Li-ion cell, 21700 high-power', '200 Energy storage', 'Battery modules', 'cell',
+         lambda: union(cyl(CELL_D / 2, CELL_H - 0.002, 'y'), cyl(0.004, 0.002, 'y', (0, CELL_H / 2, 0))),
+         supplier='buy', mass=0.070, process='Purchased high-power cylindrical cell (Molicel P50B class)',
+         spec=dict(nominal_V=3.6, capacity_Ah=5.0, energy_Wh=18.0, continuous_A=60, continuous_C=12, chemistry='NMC / graphite-Si, high-power'))
     part('JD-200-012', 'Module cold plate', '200 Energy storage', 'Battery modules', 'al6061',
          lambda: box(0.39, 0.004, 0.35), process='Roll-bonded aluminium cold plate')
     part('JD-200-013', 'Module busbar', '200 Energy storage', 'Battery modules', 'copper',
@@ -548,9 +548,9 @@ def build_power():
     for i in range(5):
         for k in range(3):
             mods.append(((-0.84 + 0.42 * i, 0.250, -0.40 + 0.40 * k), 'floor'))
-    for i in range(2):
+    for i in range(2):            # front energy module in the frunk: balances the CG over the rotor centroid
         for k in range(2):
-            mods.append(((-2.36 + 0.42 * i, 0.50, -0.20 + 0.40 * k), 'rear'))
+            mods.append(((1.55 + 0.42 * i, 0.36, -0.20 + 0.40 * k), 'front'))
     for m, (pos, where) in enumerate(mods):
         nid = f'bmod_{m:02d}'
         node(nid, f'Battery module {m + 1:02d} ({where})', 'power', pos=pos, system='200')
@@ -562,7 +562,8 @@ def build_power():
         for L in range(MOD_LAYERS):
             for a in range(MOD_NX):
                 for b in range(MOD_NZ):
-                    place('JD-200-011', nid, (-0.17 + a * CELL_PITCH, 0.051 + L * (CELL_H + 0.006), -0.146 + b * CELL_PITCH))
+                    place('JD-200-011', nid, (-(MOD_NX - 1) * CELL_PITCH / 2 + a * CELL_PITCH, 0.008 + CELL_H / 2 + L * (CELL_H + 0.006),
+                                             -(MOD_NZ - 1) * CELL_PITCH / 2 + b * CELL_PITCH))
     elec = [
         ('JD-210-001', 'Battery disconnect unit (BDU)', (0.30, 0.14, 0.25), (1.00, 0.55, 0.0), 'Main contactors, pre-charge, current sensing'),
         ('JD-210-002', 'Main HV contactor', (0.07, 0.09, 0.06), None, 'Isolates pack (+/-)'),
@@ -588,7 +589,7 @@ def build_power():
     place('JD-210-003', 'power', (0.92, 0.64, 0.0))
     place('JD-210-004', 'power', (1.08, 0.64, 0.0))
     place('JD-210-005', 'power', (1.12, 0.64, 0.08))
-    part('JD-211-001', 'Traction / fan inverter (SiC, 250 kW)', '210 Power distribution', 'Inverters', 'electronic',
+    part('JD-211-001', 'Traction / fan inverter (SiC, 350 kW)', '210 Power distribution', 'Inverters', 'electronic',
          lambda: union(box(0.32, 0.09, 0.22), *[box(0.30, 0.012, 0.004, (0, 0.05, -0.09 + 0.02 * i)) for i in range(10)]),
          process='Cast Al housing, SiC half-bridges, liquid-cooled', criticality='Flight critical',
          fn='One per fan-wheel motor: road torque and flight RPM control')
@@ -603,7 +604,7 @@ def build_power():
         'JD-212-003': ('HV cable, JB → RL inverter', [(1.45, 0.62, 0.12), (0.4, 0.47, 0.66), (-0.8, 0.47, 0.66), (-1.45, 0.88, 0.40)]),
         'JD-212-004': ('HV cable, JB → RR inverter', [(1.45, 0.62, -0.12), (0.4, 0.47, -0.66), (-0.8, 0.47, -0.66), (-1.45, 0.88, -0.40)]),
         'JD-212-005': ('HV cable, BDU → JB', [(1.00, 0.55, 0.0), (1.20, 0.60, 0.0), (1.45, 0.62, 0.0)]),
-        'JD-212-006': ('HV cable, rear stack → BDU', [(-1.6, 0.58, 0.0), (-0.5, 0.47, 0.05), (0.85, 0.50, 0.0)]),
+        'JD-212-006': ('HV cable, front energy module → BDU', [(1.55, 0.47, 0.0), (1.25, 0.52, 0.05), (1.00, 0.55, 0.0)]),
         'JD-212-007': ('HV cable, CCS2 inlet → BDU', [(-2.30, 0.86, 1.05), (-2.0, 0.70, 0.75), (-1.0, 0.47, 0.70), (0.9, 0.52, 0.1)]),
     }
     for pn, (name, pts) in runs.items():
@@ -636,18 +637,16 @@ def blade_shape(hand='R'):
     return s
 
 def duct_shape():
-    prof = [(0.636, -0.16), (0.636, 0.155), (0.628, 0.166), (0.612, 0.170), (0.596, 0.166), (0.582, 0.154),
-            (0.570, 0.132), (0.561, 0.100), (0.557, 0.06), (DUCT_R, 0.02), (DUCT_R, -0.10), (0.559, -0.135),
-            (0.564, -0.16)]
+    prof = [(0.662, -0.16), (0.662, 0.155), (0.6558, 0.166), (0.6434, 0.17), (0.631, 0.166), (0.6201, 0.154), (0.6108, 0.132), (0.6039, 0.1), (0.6008, 0.06), (0.6, 0.02), (0.6, -0.1), (0.6023, -0.135), (0.6062, -0.16)]
     return revolve(prof)
 
 def tread_band():
-    pr = [(0.722, -0.15), (0.728, -0.15), (0.736, -0.142), (0.740, -0.125), (0.740, 0.125), (0.736, 0.142),
-          (0.728, 0.15), (0.722, 0.15)]
+    pr = [(0.729, -0.15), (0.733, -0.15), (0.737, -0.142), (0.740, -0.125), (0.740, 0.125), (0.737, 0.142),
+          (0.733, 0.15), (0.729, 0.15)]
     return revolve(pr)
 
 def web_spoke():
-    pts = [(0.636, -0.004), (0.678, 0.008), (0.723, 0.026), (0.723, 0.031), (0.678, 0.013), (0.636, 0.001)]
+    pts = [(RIM_R, -0.004), (0.694, 0.008), (0.730, 0.026), (0.730, 0.031), (0.694, 0.013), (RIM_R, 0.001)]
     return extrude_xy(pts, 0.26, -0.13)
 
 def vane_shape():
@@ -657,7 +656,7 @@ def vane_shape():
     v = S(cq.Workplane('YZ').workplane(offset=0.168).polyline(pts).close().extrude(DUCT_R - 0.168 + 0.004))
     return v
 
-def petal_shape(r_h, r_in, half_deg=15.0, t=0.004):
+def petal_shape(r_h, r_in, half_deg=15.0, t=0.0025):
     h = math.tan(math.radians(half_deg))
     pts = [(0, -r_h * h * 0.995), (0, r_h * h * 0.995), (-(r_h - r_in), r_in * h), (-(r_h - r_in), -r_in * h)]
     return union(extrude_xy(pts, t, -t / 2), cyl(0.006, 2 * r_h * h * 0.9, 'y'))
@@ -667,8 +666,8 @@ def build_corner_parts():
     sysm = '300 Fan-wheel module'
     part('JD-300-001', 'Tread band (airless tyre)', sysm, 'Road tyre', 'rubber', tread_band,
          process='Moulded SBR tread on steel-belted shear band', fn='Road contact; forms the duct outer fairing in flight',
-         spec=dict(size='1480 × 300 airless', load_index='~105 (≥ 950 kg)', speed='≥ 200 km/h'))
-    part('JD-300-002', 'Tread block', sysm, 'Road tyre', 'rubber', lambda: box(0.045, 0.018, 0.12),
+         spec=dict(size='1480 × 300 airless, 11 mm tread band', load_index='~100 (≥ 800 kg)', speed='≥ 200 km/h'))
+    part('JD-300-002', 'Tread block', sysm, 'Road tyre', 'rubber', lambda: box(0.045, 0.007, 0.12),
          process='Integral with tread band moulding (modelled separately per A1 baseline)')
     part('JD-300-003', 'Airless shear-web spoke', sysm, 'Road tyre', 'pu', web_spoke,
          process='Cast thermoplastic PU web', fn='Load path tread band → rim with designed radial compliance')
@@ -677,8 +676,7 @@ def build_corner_parts():
          fn='Road rim in drive mode; ducted-fan shroud with bell-mouth inlet in flight',
          spec=dict(throat_diameter_mm=1112, tip_gap_mm=16, inlet_lip_radius_mm=42, exit_area_ratio=1.03))
     part('JD-300-011', 'Duct lip erosion shield', sysm, 'Duct & rim', 'ti64',
-         lambda: revolve([(0.565, 0.13), (0.580, 0.155), (0.598, 0.168), (0.614, 0.171), (0.612, 0.168),
-                          (0.596, 0.163), (0.581, 0.150), (0.568, 0.128)]),
+         lambda: revolve([(0.607, 0.13), (0.6186, 0.155), (0.6325, 0.168), (0.6449, 0.171), (0.6434, 0.168), (0.631, 0.163), (0.6194, 0.15), (0.6093, 0.128)]),
          process='Hydroformed Ti-6Al-4V', fn='Rain / sand erosion protection of the inlet lip')
     part('JD-300-012', 'Rim lock receiver', sysm, 'Duct & rim', 'steel_stn',
          lambda: tube(0.018, 0.009, 0.03, 'z'), process='Machined 17-4PH, nitrided', criticality='Flight critical',
@@ -691,14 +689,14 @@ def build_corner_parts():
     part('JD-300-015', 'Rim bearing (thin-section 4-point contact)', sysm, 'Stator', 'bearing',
          lambda: tube(0.149, 0.137, 0.035, 'z', (0, 0, -0.09)), supplier='buy',
          process='Purchased thin-section bearing (Kaydon-type)', criticality='Flight critical')
-    part('JD-300-016', 'Carbon-ceramic brake ring', sysm, 'Brakes', 'ceramic', lambda: tube(0.630, 0.566, 0.012, 'z'),
+    part('JD-300-016', 'Carbon-ceramic brake ring', sysm, 'Brakes', 'ceramic', lambda: tube(0.655, 0.608, 0.008, 'z'),
          process='C/SiC brake ring, cross-drilled', criticality='Safety',
          fn='Road friction brake; clamped as a rim lock in flight mode')
     part('JD-300-020', 'Iris petal, outboard (inlet collector)', sysm, 'Petal covers', 'cfrp',
-         lambda: petal_shape(0.600, 0.100), process='Pre-preg CFRP, 3 mm', criticality='Safety',
+         lambda: petal_shape(0.640, 0.100), process='Pre-preg CFRP, 2.5 mm', criticality='Safety',
          fn='Closed: wheel cover / blade guard. Open (100°): inlet collector extension')
     part('JD-300-021', 'Iris petal, inboard (exit diffuser)', sysm, 'Petal covers', 'cfrp',
-         lambda: petal_shape(0.556, 0.140), process='Pre-preg CFRP, 3 mm', criticality='Safety',
+         lambda: petal_shape(0.600, 0.140), process='Pre-preg CFRP, 2.5 mm', criticality='Safety',
          fn='Closed: wheel cover. Open (95°): exit diffuser extension')
     part('JD-300-022', 'Petal hinge actuator (SMA / micro-servo)', sysm, 'Petal covers', 'electronic',
          lambda: box(0.03, 0.02, 0.015), supplier='buy', fn='Opens / closes one petal; position switch')
@@ -742,7 +740,7 @@ def build_corner_parts():
     part('JD-320-001', 'Motor housing (axial flux)', '320 Motor', 'Motor', 'al_cast',
          lambda: tube(0.135, 0.127, 0.13, 'z', (0, 0, -0.11)).fuse(cyl(0.135, 0.008, 'z', (0, 0, -0.171))),
          process='Cast A356 with integral cooling jacket', criticality='Flight critical',
-         spec=dict(type='Yokeless axial flux, dual rotor', peak_kW=230, cont_kW=165, peak_Nm=520, mass_kg_target=26))
+         spec=dict(type='Axial flux, dual rotor (EMRAX 348 class)', peak_kW=320, cont_kW=210, peak_Nm=900, cont_Nm=600, mass_kg_target=38))
     part('JD-320-002', 'Stator core segment set', '320 Motor', 'Motor', 'sisteel',
          lambda: tube(0.122, 0.060, 0.034, 'z', (0, 0, -0.10)), process='Soft-magnetic composite / laminated segments')
     part('JD-320-003', 'Stator coil (concentrated winding)', '320 Motor', 'Motor', 'copper',
@@ -976,15 +974,15 @@ def build_corner(name):
         place('JD-320-003', md, (0.091 * math.cos(a), 0.091 * math.sin(a), -0.10), q_rot(('z', math.degrees(a) + 90)))
     for zb in (-0.03, -0.155):
         place('JD-320-007', md, (0, 0, zb))
-    place('JD-360-001', md, (0, 0.598, -0.192), q_rot(('z', 0)))
-    place('JD-360-002', md, (0, 0.598, -0.178)); place('JD-360-002', md, (0, 0.598, -0.206))
+    place('JD-360-001', md, (0, 0.632, -0.192), q_rot(('z', 0)))
+    place('JD-360-002', md, (0, 0.632, -0.178)); place('JD-360-002', md, (0, 0.632, -0.206))
     for a in (45, 135):
-        r = 0.60
+        r = 0.632
         place('JD-340-020', md, (r * math.cos(math.radians(a)), r * math.sin(math.radians(a)), -0.215))
         place('JD-340-021', md, (r * math.cos(math.radians(a)), r * math.sin(math.radians(a)), -0.265))
     bolt_circle(FAST['M10'], md, 0.055, 8, -0.192, head_up=False)
     for dx in (-0.035, 0.035):
-        place(FAST['M10'], md, (dx, 0.598, -0.15))
+        place(FAST['M10'], md, (dx, 0.632, -0.15))
     # --- rim (spins in road mode, locked in flight)
     rm = node(f'rim_{name}', f'Rim / duct / tyre {name}', md, anim=dict(kind='rim', type='rot', axis=(0, 0, 1), sign=1),
               system='300')
@@ -996,7 +994,7 @@ def build_corner(name):
         a = 360.0 * k / N_TREAD
         for row, zz in enumerate((-0.068, 0.068)):
             aa = math.radians(a + (2.5 if row else 0))
-            place('JD-300-002', rm, (0.749 * math.cos(aa), 0.749 * math.sin(aa), zz), q_rot(('z', math.degrees(aa) - 90)))
+            place('JD-300-002', rm, (0.7435 * math.cos(aa), 0.7435 * math.sin(aa), zz), q_rot(('z', math.degrees(aa) - 90)))
     for k in range(N_WEB):
         place('JD-300-003', rm, (0, 0, 0), q_rot(('z', 360.0 * k / N_WEB)))
     for k in range(N_VANES):
@@ -1006,18 +1004,18 @@ def build_corner(name):
             aa = math.radians(a + da)
             place(FAST['M8'], rm, (0.16 * math.cos(aa), 0.16 * math.sin(aa), -0.135), q_rot(('x', 180)))
         aa = math.radians(a)
-        place(FAST['M6'], rm, (0.645 * math.cos(aa), 0.645 * math.sin(aa), -0.085), q_rot(('y', 90), ('z', a)))
+        place(FAST['M6'], rm, (0.668 * math.cos(aa), 0.668 * math.sin(aa), -0.085), q_rot(('y', 90), ('z', a)))
     for a in (45, 135, 225, 315):
-        place('JD-300-012', rm, (0.60 * math.cos(math.radians(a)), 0.60 * math.sin(math.radians(a)), -0.175))
-    bolt_circle(FAST['M6'], rm, 0.598, 12, -0.205, head_up=False, start=15)
+        place('JD-300-012', rm, (0.632 * math.cos(math.radians(a)), 0.632 * math.sin(math.radians(a)), -0.175))
+    bolt_circle(FAST['M6'], rm, 0.632, 12, -0.205, head_up=False, start=15)
     for k in range(N_PETALS):
         a = 30.0 * k
         ar = math.radians(a)
-        po = node(f'petO_{name}_{k}', f'Outboard petal {k + 1}', rm, pos=(0.600 * math.cos(ar), 0.600 * math.sin(ar), 0.176),
+        po = node(f'petO_{name}_{k}', f'Outboard petal {k + 1}', rm, pos=(0.640 * math.cos(ar), 0.640 * math.sin(ar), 0.176),
                   q=q_rot(('z', a)), anim=dict(kind='petal_out', type='rot', axis=(0, 1, 0), sign=1), system='300')
         place('JD-300-020', po)
         place('JD-300-022', po, (0.012, 0.0, 0.006))
-        pi = node(f'petI_{name}_{k}', f'Inboard petal {k + 1}', rm, pos=(0.556 * math.cos(ar), 0.556 * math.sin(ar), -0.178),
+        pi = node(f'petI_{name}_{k}', f'Inboard petal {k + 1}', rm, pos=(0.600 * math.cos(ar), 0.600 * math.sin(ar), -0.178),
                   q=q_rot(('z', a)), anim=dict(kind='petal_in', type='rot', axis=(0, 1, 0), sign=-1, index=(k == 3)),
                   system='300')
         place('JD-300-021', pi)
@@ -1161,7 +1159,7 @@ def build_emergency():
     node('emergency_R', 'Emergency (starboard mirror)', 'emergency', mirror=True, system='450')
     place('JD-450-004', 'emergency_R', (-2.05, 1.05, 0.0))
     part('JD-450-005', 'Fire suppression bottle (battery bay)', '450 Emergency', 'Fire', 'steel',
-         lambda: union(cyl(0.05, 0.25, 'x'), sphere(0.05, (0.125, 0, 0)), sphere(0.05, (-0.125, 0, 0))), supplier='buy',
+         lambda: union(cyl(0.035, 0.22, 'x'), sphere(0.035, (0.11, 0, 0)), sphere(0.035, (-0.11, 0, 0))), supplier='buy',
          criticality='Safety', fn='Battery-bay thermal-runaway suppression')
     place('JD-450-005', 'emergency', (-1.85, 0.40, 0.0))
 
@@ -1179,12 +1177,12 @@ def build_thermal():
         place('JD-500-002', 'thermal', (2.36, 0.55, s * 0.55), q_rot(('y', s * 35)))
     comps = [
         ('JD-500-003', 'Electric coolant pump', lambda: union(cyl(0.04, 0.10, 'x'), cyl(0.012, 0.05, 'y', (0.03, 0.04, 0))),
-         [(2.05, 0.45, 0.30), (2.05, 0.45, -0.30)], 'Motor / power-electronics loop circulation'),
+         [(2.05, 0.45, 0.48), (2.05, 0.45, -0.48)], 'Motor / power-electronics loop circulation'),
         ('JD-500-004', 'Coolant expansion reservoir', lambda: box(0.14, 0.12, 0.10), [(2.30, 0.80, 0.40)], 'Degas / expansion'),
         ('JD-500-005', 'Battery chiller (refrigerant ↔ coolant)', lambda: box(0.18, 0.10, 0.08), [(1.75, 0.50, 0.45)], 'Pack cooling for DC fast charge & hover'),
         ('JD-500-006', 'Heat-pump e-compressor', lambda: union(cyl(0.06, 0.20, 'x'), box(0.08, 0.10, 0.10, (0.12, 0, 0))),
          [(1.75, 0.55, -0.45)], 'Cabin heat pump / A/C'),
-        ('JD-500-007', 'Cabin HVAC module', lambda: box(0.30, 0.20, 0.45), [(0.85, 0.75, 0.0)], 'Blower, evaporator, PTC'),
+        ('JD-500-007', 'Cabin HVAC module', lambda: box(0.25, 0.15, 0.35), [(0.85, 0.75, 0.0)], 'Blower, evaporator, PTC'),
         ('JD-500-008', 'Coolant manifold / multi-way valve', lambda: union(box(0.12, 0.06, 0.10), *[cyl(0.012, 0.04, 'y', (dx, 0.04, 0)) for dx in (-0.04, 0, 0.04)]),
          [(1.95, 0.52, 0.0)], 'Routes coolant between battery, motors, cabin'),
     ]
@@ -1194,8 +1192,8 @@ def build_thermal():
         for p in poss:
             place(pn, 'thermal', p)
     hoses = {
-        'JD-510-001': ('Coolant hose, radiator → pump (port)', [(2.45, 0.40, 0.60), (2.3, 0.40, 0.45), (2.05, 0.45, 0.33)]),
-        'JD-510-002': ('Coolant hose, radiator → pump (stbd)', [(2.45, 0.40, -0.60), (2.3, 0.40, -0.45), (2.05, 0.45, -0.33)]),
+        'JD-510-001': ('Coolant hose, radiator → pump (port)', [(2.45, 0.40, 0.60), (2.3, 0.40, 0.55), (2.05, 0.45, 0.50)]),
+        'JD-510-002': ('Coolant hose, radiator → pump (stbd)', [(2.45, 0.40, -0.60), (2.3, 0.40, -0.55), (2.05, 0.45, -0.50)]),
         'JD-510-003': ('Coolant hose, manifold → front inverters', [(1.95, 0.55, 0.0), (1.7, 0.85, 0.2), (1.45, 0.98, 0.35)]),
         'JD-510-004': ('Coolant hose, manifold → rear loop', [(1.95, 0.52, 0.05), (0.9, 0.46, 0.70), (-0.9, 0.46, 0.70), (-1.45, 0.88, 0.40)]),
         'JD-510-005': ('Coolant hose, manifold → battery cold plates', [(1.90, 0.50, -0.05), (1.3, 0.45, -0.2), (1.08, 0.40, -0.30)]),

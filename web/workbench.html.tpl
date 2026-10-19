@@ -22,7 +22,7 @@
   <div class="concept-status"><i></i> CONCEPT STUDY <span>REV 07</span></div>
 </header>
 <nav class="mainnav" aria-label="Workbench panels">
-  <div class="tabs"><button data-tab="model" class="active">01 <span>Design studio</span></button><button data-tab="systems">02 <span>Systems</span></button><button data-tab="materials">03 <span>Materials</span></button><button data-tab="notes">04 <span>Design register</span></button><button data-tab="sequence">05 <span>Blueprint sequence</span></button><button data-tab="advanced">06 <span>Advanced blueprint</span></button><button data-tab="flight">07 <span>Proprotor &amp; flight</span></button></div>
+  <div class="tabs"><button data-tab="model" class="active">01 <span>Design studio</span></button><button data-tab="systems">02 <span>Systems</span></button><button data-tab="materials">03 <span>Materials</span></button><button data-tab="notes">04 <span>Design register</span></button><button data-tab="sequence">05 <span>Blueprint sequence</span></button><button data-tab="advanced">06 <span>Advanced blueprint</span></button><button data-tab="flight">07 <span>Proprotor &amp; flight</span></button><button data-tab="prototype">08 <span>Miniature prototype</span></button></div>
   <span class="nav-meta">SOURCE-ALIGNED / NOT FLIGHT-VALIDATED</span>
 </nav>
 <main id="main">
@@ -214,6 +214,41 @@
         <div class="kpis" id="flight-kpis"></div>
         <div class="charts" id="flight-charts"></div>
         <div class="flight-notes" id="flight-notes"></div>
+      </div>
+    </div>
+  </div>
+</section>
+<section id="prototype-panel" class="panel adv-panel flight-doc" hidden>
+  <div class="flight-wrap proto-wrap">
+    <header class="flight-head">
+      <span class="eyebrow">JDM · MINIATURE FLYING PROTOTYPE · ABOUT 1:11.5 · BUILD IT FROM HOBBY PARTS</span>
+      <h2>Build a miniature prototype</h2>
+      <p>A small flying model of the Rev 08.1 car with the same body, the same 90° pod swing about a hinge above each tyre and the same four-pod hover layout, using four electric ducted fans, hobby servos and an ArduPilot flight controller. Every printed part is CADed and downloadable. Pick your parts and every check, mass and cost recomputes; then follow the build steps.</p>
+    </header>
+    <div class="proto-top">
+      <div class="proto-stage">
+        <div class="adv-toolbar">
+          <label class="tl-sel">Pods <input id="proto-conv" type="range" min="0" max="1" step="0.01" value="0" aria-label="Pod conversion road to flight"><span id="proto-conv-label">Road</span></label>
+          <label class="tl-sel">Explode <input id="proto-explode" type="range" min="0" max="1" step="0.01" value="0" aria-label="Explode"></label>
+          <label class="tl-chk"><input type="checkbox" id="proto-shell" checked> Body shell</label>
+          <button id="proto-reset" class="tl-btn">↺ View</button>
+        </div>
+        <div id="proto-viewport" class="adv-viewport" tabindex="0" aria-label="Miniature prototype assembly. Drag to orbit, scroll to zoom.">
+          <div class="adv-loading" id="proto-loading">LOADING MINIATURE PROTOTYPE CAD</div>
+          <div class="adv-hint" id="proto-hint">DRAG TO ORBIT · SCROLL TO ZOOM</div>
+        </div>
+      </div>
+      <aside class="proto-steps">
+        <div class="proto-step-nav"><button id="proto-prev" class="tl-btn" aria-label="Previous step">◀</button><span id="proto-step-code">STEP 0 / 0</span><button id="proto-next" class="tl-btn primary" aria-label="Next step">Next ▶</button></div>
+        <ol id="proto-step-list" class="proto-step-list"></ol>
+        <article id="proto-step" class="proto-step" aria-live="polite"></article>
+      </aside>
+    </div>
+    <div class="flight-grid">
+      <aside class="flight-inputs" id="proto-inputs"></aside>
+      <div class="flight-out">
+        <div class="kpis" id="proto-kpis"></div>
+        <div id="proto-sections"></div>
       </div>
     </div>
   </div>
