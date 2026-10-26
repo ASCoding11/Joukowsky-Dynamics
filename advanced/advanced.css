@@ -283,3 +283,6 @@ input[type=range] { accent-color: var(--accent); }
 .winding .mn { fill: #c8303f; opacity: .8; } .winding .ms { fill: #3a6ea8; opacity: .8; }
 .winding .hub { fill: #0b1d27; stroke: #6be1ed55; }
 @media (max-width: 960px) { .motor-grid { grid-template-columns: 1fr; } }
+
+.project-title .jd-back { color: var(--accent); text-decoration: none; margin-right: 18px; }
+.project-title .jd-back:hover { text-decoration: underline; }

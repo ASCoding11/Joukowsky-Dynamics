@@ -10,7 +10,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const REPO = 'https://github.com/ASCoding11/Joukowsky-Dynamics/blob/main/';
-const BASE = (() => { try { return new URL('./', import.meta.url); } catch (e) { return new URL('./', location.href); } })();   // blob: when decrypted in place
+const BASE = new URL('./', import.meta.url);
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const smooth = (t) => t * t * (3 - 2 * t);
@@ -42,8 +42,7 @@ function showTab(tab) {
 let DATA, BUF, bootPromise;
 function boot() {
   if (!bootPromise) {
-    const pre = window.__JD_DATA;                     // decrypted in place by the password page on the personal site
-    bootPromise = (pre ? Promise.resolve([pre.parts, pre.meshes]) : Promise.all([
+    bootPromise = Promise.all([
       fetch(new URL('data/parts.json', BASE)).then((r) => r.json()),
       fetch(new URL('data/meshes.bin', BASE)).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status)))
         .catch(() => fetch(new URL('data/meshes.json', BASE)).then((r) => r.json()).then((j) => {   // base64 pack where .bin is not served
@@ -51,7 +50,7 @@ function boot() {
           for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
           return out.buffer;
         })),
-    ])).then(([d, b]) => { DATA = d; BUF = b; buildEngine(); buildModel(); computeMass(); initSequence(); initAdvanced(); initFlight(); })
+    ]).then(([d, b]) => { DATA = d; BUF = b; buildEngine(); buildModel(); computeMass(); initSequence(); initAdvanced(); initFlight(); })
       .catch((e) => { for (const id of ['seq-loading', 'adv-loading']) { const el = $(id); if (el) el.textContent = 'CAD DATA FAILED TO LOAD: ' + e.message; } throw e; });
   }
   return bootPromise;
@@ -1530,13 +1529,8 @@ function fetchPack(path, root = BASE) {
 let miniPromise;
 function bootMini() {
   if (!miniPromise) {
-    const pre = window.__JD_DATA && window.__JD_DATA.mini, files = window.__JD_FILES;
-    // decrypted in place by the password page: BASE is the page itself, so fall back to its advanced/ folder for files the vault lacks
-    const root = window.__JD_DATA ? new URL('advanced/', location.href) : BASE;
     const json = (r) => (r.ok ? r.json() : Promise.reject(new Error('mini parts ' + r.status)));
-    miniPromise = (pre ? Promise.resolve([pre.parts, pre.meshes])
-      : files && files['advanced/data/mini/parts.json'] ? Promise.resolve([JSON.parse(new TextDecoder().decode(files['advanced/data/mini/parts.json'])), files['advanced/data/mini/meshes.bin']])
-      : Promise.all([fetch(new URL('data/mini/parts.json', root)).then(json), fetchPack('data/mini/meshes', root)]))
+    miniPromise = Promise.all([fetch(new URL('data/mini/parts.json', BASE)).then(json), fetchPack('data/mini/meshes')])
       .then(([d, b]) => { MINI.data = d; MINI.buf = b; buildMini(); measureMini(); initProto(); $('proto-loading').remove(); })
       .catch((e) => { const el = $('proto-loading'); if (el) el.textContent = 'PROTOTYPE CAD FAILED TO LOAD: ' + e.message; throw e; });
   }
