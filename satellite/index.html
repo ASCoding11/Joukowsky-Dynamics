@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07121b">
+  <title>Tideline SAR Workbench</title>
+  <meta name="description" content="Tideline: an X-band synthetic-aperture-radar smallsat designed to watch ports and shipping lanes through cloud and darkness, with every part in CAD and the radar physics computed live.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../base.css"><link rel="stylesheet" href="../style.css?v=4">
+  <link rel="stylesheet" href="../revision.css?v=4"><link rel="stylesheet" href="../design.css?v=8">
+  <link rel="stylesheet" href="../advanced/advanced.css?v=3">
+  <link rel="stylesheet" href="./sat.css?v=1">
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+</head>
+<body>
+<header class="topbar">
+  <div class="wordmark"><strong>JOUKOWSKY</strong><span>DYNAMICS</span><small>CONCEPT ENGINEERING</small></div>
+  <div class="project-title"><a href="https://ascoding11.github.io/engineering/" class="jd-back">&larr; Engineering projects</a>TIDELINE <span>/ X-BAND SAR FOR PORTS AND SHIPPING LANES</span></div>
+  <div class="concept-status"><i></i> CONCEPT STUDY <span>REV 01</span></div>
+</header>
+<nav class="mainnav" aria-label="Workbench panels">
+  <div class="tabs"><button data-tab="mission" class="active">01 <span>Mission sequence</span></button><button data-tab="blueprint">02 <span>Advanced blueprint</span></button><button data-tab="physics">03 <span>SAR &amp; mission physics</span></button><button data-tab="ports">04 <span>Port analytics</span></button><button data-tab="proto">05 <span>Ground prototype</span></button></div>
+  <span class="nav-meta">X-BAND 9.65 GHz · 560 km DAWN-DUSK SSO</span>
+</nav>
+<main id="main">
+
+<section id="mission-panel" class="panel adv-panel">
+  <div class="seq-layout">
+    <aside class="seq-rail">
+      <span class="eyebrow">TIDELINE / HOLOGRAPHIC MISSION SEQUENCE</span>
+      <h2>Launch to first port image</h2>
+      <ol id="seq-steps" class="seq-steps"></ol>
+      <div class="seq-telemetry" id="seq-telemetry" aria-live="polite"></div>
+    </aside>
+    <div class="seq-stage">
+      <div id="seq-viewport" class="adv-viewport holo" tabindex="0" aria-label="Holographic mission sequence. Drag to orbit, scroll to zoom.">
+        <div class="hud-corner tl"></div><div class="hud-corner tr"></div><div class="hud-corner bl"></div><div class="hud-corner br"></div>
+        <div class="hud-top"><span id="seq-step-code">T+00.0</span><strong id="seq-step-title">Initialising</strong><span id="seq-step-sub"></span></div>
+        <div class="hud-scan" aria-hidden="true"></div>
+        <div class="sat-alert" id="seq-alert" hidden></div>
+        <div class="adv-loading" id="seq-loading">LOADING TIDELINE CAD</div>
+      </div>
+      <div class="seq-timeline">
+        <button id="seq-play" class="tl-btn primary" aria-label="Play or pause">▶ Play</button>
+        <input id="seq-scrub" type="range" min="0" max="60" step="0.01" value="0" aria-label="Sequence time">
+        <span id="seq-time" class="tl-time">00.0 / 60.0 s</span>
+        <label class="tl-sel">Speed <select id="seq-speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label>
+        <div class="seg" role="group" aria-label="Render style"><button data-seqstyle="holo" class="active">Hologram</button><button data-seqstyle="cad">Material</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="blueprint-panel" class="panel adv-panel" hidden>
+  <div class="adv-layout">
+    <aside class="adv-tree-rail">
+      <div class="section-title">PART TREE <span id="adv-count">0</span></div>
+      <input id="adv-search" type="search" placeholder="Search part number, name, material…" aria-label="Search parts">
+      <select id="adv-filter" aria-label="Filter"><option value="">All parts</option><option value="crit">Mission critical</option><option value="make">Make (in-house)</option><option value="buy">Buy (purchased)</option></select>
+      <div id="adv-tree" class="adv-tree"></div>
+    </aside>
+    <div class="adv-center">
+      <div class="adv-toolbar">
+        <div class="seg" role="group" aria-label="View"><button data-advview="3d" class="active">3D assembly</button><button data-advview="bom">Bill of materials</button><button data-advview="mass">Mass, CG &amp; inertia</button></div>
+        <label class="tl-sel">Configuration <input id="adv-config" type="range" min="0" max="1" step="0.01" value="1" aria-label="Stowed to deployed"><span id="adv-config-label">Deployed</span></label>
+        <label class="tl-sel">Explode <input id="adv-explode" type="range" min="0" max="1" step="0.01" value="0" aria-label="Explode"></label>
+        <label class="tl-chk"><input type="checkbox" id="adv-section"> Half-section</label>
+        <label class="tl-chk"><input type="checkbox" id="adv-holo"> Hologram</label>
+        <button id="adv-reset" class="tl-btn">↺ Reset</button>
+      </div>
+      <div id="adv-viewport" class="adv-viewport" tabindex="0" aria-label="Tideline assembly. Click any part to open its datasheet.">
+        <div class="adv-loading" id="adv-loading">LOADING TIDELINE CAD</div>
+        <div class="adv-hint">CLICK A PART · DRAG TO ORBIT · SCROLL TO ZOOM · RIGHT-DRAG TO PAN</div>
+      </div>
+      <div id="adv-bom" class="adv-doc" hidden></div>
+      <div id="adv-mass" class="adv-doc" hidden></div>
+    </div>
+    <aside class="adv-sheet" id="adv-sheet">
+      <div class="sheet-empty"><span class="eyebrow">PART DATASHEET</span><h3>Select a part</h3><p>Every part of Tideline is modelled as a B-rep solid with its own STEP file: all 680 transmit / receive modules, every hinge and every battery cell. Pick one in the tree, the BOM or the 3D view.</p></div>
+    </aside>
+  </div>
+</section>
+
+<section id="physics-panel" class="panel adv-panel flight-doc" hidden>
+  <div class="flight-wrap">
+    <header class="flight-head">
+      <span class="eyebrow">RADAR EQUATION · ORBIT MECHANICS · POWER, DATA, ATTITUDE AND LIFETIME BUDGETS</span>
+      <h2>SAR &amp; mission physics</h2>
+      <p>Everything here recomputes from the inputs and the CAD: noise-equivalent σ⁰ from the SAR radar equation, resolution, swath, range and azimuth ambiguities, the smallest ship each mode can detect against sea clutter, revisit over ports, energy and battery depth of discharge, data volume against downlink, slew agility from the CAD inertia, and propellant for drag and de-orbit. Defaults are the CADed design.</p>
+    </header>
+    <div class="flight-grid">
+      <aside class="flight-inputs" id="phys-inputs"></aside>
+      <div class="flight-out">
+        <div class="kpis" id="phys-kpis"></div>
+        <div class="charts" id="phys-charts"></div>
+        <div class="flight-notes" id="phys-notes"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="ports-panel" class="panel adv-panel flight-doc" hidden>
+  <div class="flight-wrap">
+    <header class="flight-head">
+      <span class="eyebrow">SIMULATED SAR SCENE · CFAR SHIP DETECTION · AIS MATCHING · CONGESTION AND BLOCKAGE ALERTS</span>
+      <h2>Port &amp; shipping-lane analytics</h2>
+      <p>A generic container port imaged in the mode you choose. The scene is simulated: sea clutter, land and ships are rendered with the resolution, noise floor and speckle from the physics tab. A real constant-false-alarm-rate detector then finds the ships, matches them to AIS reports and works out berth occupancy, the anchorage queue, dark vessels and whether the channel is blocked.</p>
+    </header>
+    <div class="ports-top">
+      <div class="ports-stage">
+        <div class="adv-toolbar">
+          <label class="tl-sel">Scenario <select id="pt-scn"><option value="normal">Normal day</option><option value="congested">Congestion: queue at anchorage</option><option value="blocked">Channel blocked by a grounded ship</option><option value="storm">Storm at night, full cloud</option></select></label>
+          <label class="tl-sel">Mode <select id="pt-mode"><option value="spot">Spotlight</option><option value="strip" selected>Stripmap</option><option value="scan">ScanSAR</option></select></label>
+          <div class="seg" role="group" aria-label="Sensor"><button data-ptview="sar" class="active">SAR</button><button data-ptview="opt">Optical</button></div>
+          <label class="tl-chk"><input type="checkbox" id="pt-det" checked> Detections</label>
+          <button id="pt-new" class="tl-btn">↻ New pass</button>
+        </div>
+        <div class="ports-canvas"><canvas id="pt-canvas" width="720" height="720" aria-label="Simulated SAR image of the port"></canvas><div class="pt-legend" id="pt-legend"></div></div>
+      </div>
+      <aside class="ports-side">
+        <div class="kpis" id="pt-kpis"></div>
+        <div id="pt-alerts" class="pt-alerts"></div>
+      </aside>
+    </div>
+    <div id="pt-sections"></div>
+  </div>
+</section>
+
+<section id="proto-panel" class="panel adv-panel flight-doc" hidden>
+  <div class="flight-wrap proto-wrap">
+    <header class="flight-head">
+      <span class="eyebrow">TABLETOP RAIL SAR · 60 GHz FMCW · SAME PRINCIPLE AS THE SATELLITE · ABOUT $400</span>
+      <h2>Build a ground prototype</h2>
+      <p>You can't fly a satellite on the bench, but you can test the idea it depends on. A 60 GHz radar board rides a 1 m motorised rail and records an echo every 2.5 mm, exactly as Tideline records a pulse every 1 m of orbit. Back-projection focuses the echoes into a sharp image of a model harbour, through a cardboard “cloud” the camera can't see past. Every part is CADed, and the processing script runs on your laptop.</p>
+    </header>
+    <div class="proto-top">
+      <div class="proto-stage">
+        <div class="adv-toolbar">
+          <label class="tl-sel">Carriage <input id="pr-scan" type="range" min="0" max="1" step="0.005" value="0.5" aria-label="Carriage position"></label>
+          <button id="pr-run" class="tl-btn primary">▶ Run a scan</button>
+          <label class="tl-chk"><input type="checkbox" id="pr-screen" checked> Cloud screen</label>
+          <button id="pr-reset" class="tl-btn">↺ View</button>
+        </div>
+        <div id="pr-viewport" class="adv-viewport" tabindex="0" aria-label="Rail SAR rig. Drag to orbit.">
+          <div class="adv-loading" id="pr-loading">LOADING PROTOTYPE CAD</div>
+        </div>
+      </div>
+      <aside class="proto-steps pr-image">
+        <div class="proto-step-nav"><span>FOCUSED IMAGE (SIMULATED)</span><span id="pr-status">ready</span></div>
+        <canvas id="pr-canvas" width="400" height="300" aria-label="Back-projected rail SAR image"></canvas>
+        <div id="pr-imgnote" class="proto-step"></div>
+      </aside>
+    </div>
+    <div class="flight-grid">
+      <aside class="flight-inputs" id="pr-inputs"></aside>
+      <div class="flight-out">
+        <div class="kpis" id="pr-kpis"></div>
+        <div id="pr-sections"></div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+<footer><span><i></i> VISUALIZATION READY</span><span id="geometry-status">TIDELINE REV 01</span><span>CONCEPT DESIGN · NOT FLIGHT-QUALIFIED</span></footer>
+<script type="module" src="./sat.js?v=1"></script>
+</body></html>

@@ -117,3 +117,55 @@ Concept geometry for design exploration, not a flight-qualified design. The flig
 hover power, endurance and the levers (mass, disk area, a deployable wing for true axial cruise)
 rather than hiding them. No tolerances, fatigue, aeroelastic, crash or fault-tolerance
 substantiation has been done.
+
+## Tideline: X-band SAR satellite for ports and shipping lanes (`satellite/`)
+
+A second Joukowsky Dynamics concept, at https://ascoding11.github.io/Joukowsky-Dynamics/satellite/. It's a synthetic-aperture-radar
+smallsat that watches ports, anchorages and shipping lanes through cloud, rain and darkness, built the same way as the car:
+every part in CAD, and the physics computed live in the browser.
+
+**Design**
+
+* X-band (9.65 GHz), 560 km dawn-dusk sun-synchronous orbit (97.6°).
+* A 4.1 × 0.75 m deployable active phased array: a centre panel plus two wings of two panels each, with 680 GaN T/R modules
+  (4.1 kW peak), spring hinges with dampers and latches, and SMA hold-down releases.
+* A 0.8 m honeycomb bus with a 15-inch rideshare ring.
+* Power: a two-panel solar wing plus body-mounted cells (about 600 W), and an 8s12p 18650 battery (1.2 kWh) with a
+  supercapacitor payload power unit.
+* Four reaction wheels, star trackers, a 300 W krypton Hall thruster, a gimballed X-band horn (800 Mbit/s), S-band TT&C,
+  an AIS receiver and an L-band relay modem.
+* Wet mass about 134 kg.
+* Modes:
+  * spotlight, about 1.0 × 0.5 m;
+  * stripmap, 3.0 × 2.3 m over a 30 km swath;
+  * ScanSAR, about 7 × 12 m over a 120 km swath.
+
+**Workbench tabs**
+
+1. **Mission sequence:** a holographic sequence from separation, wing deployment and the roll to imaging attitude to imaging
+   a port, on-board detection, the relay and the downlink.
+2. **Advanced blueprint:** part tree, BOM, mass / CG / inertia (deployed and stowed) and a datasheet with a three-view
+   drawing and STEP link for every part.
+3. **SAR & mission physics:** the SAR radar equation (NESZ), numerically integrated range and azimuth ambiguities, the
+   resolution, swath and PRF window, the smallest detectable ship from an X-band sea-clutter model, revisit vs latitude,
+   data vs downlink, the X-band link budget, power and battery state of charge over an orbit, array thermal, slew time from
+   the CAD inertia, drag, propellant and de-orbit. 27 checks with the CADed defaults: 26 pass. The one marginal is revisit:
+   one satellite sees a mid-latitude port about every 39 h, so daily coverage needs a constellation of at least two
+   (the satellites slider shows it).
+4. **Port analytics:** a simulated SAR scene of a generic port, rendered at the chosen mode's resolution, noise floor and
+   sea clutter. A two-pass CA-CFAR detector runs on it, then AIS matching (dark vessels), berth occupancy, the anchorage
+   queue and waiting time, and channel-blockage detection. Scenarios: normal, congested, blocked channel, and storm at
+   night with an optical comparison.
+5. **Ground prototype:** a tabletop rail SAR (a 60 GHz FMCW board on a 1 m belt-driven rail) that images a model harbour
+   through a cardboard "cloud", about $380 in parts. The browser simulates the scan and back-projection live.
+   `satellite/prototype/rail_sar.py` processes real captures, or `--simulate`; its focus matches theory (5.0 mm
+   cross-range and 4.5 cm range).
+
+**CAD**
+
+* `cad/source/build_sat.py`: 44 parts, 1,547 placements. Writes `satellite/data/`, `cad/sat/step/` and the BOM and
+  assembly STEP.
+* `cad/source/build_railsar.py`: 21 parts, with STL files for the printed ones in `cad/sat-proto/stl/`.
+
+Sea clutter and ship radar cross-section are empirical fits, and the port is generic rather than a real place. Not modelled:
+beam spoiling, nadir echoes, quantisation noise, ionosphere and detailed thermal transients.

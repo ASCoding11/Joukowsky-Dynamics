@@ -1,0 +1,28 @@
+/* Tideline workbench additions on top of the Joukowsky workbench styles (style.css, advanced.css). */
+.project-title .jd-back { color: var(--accent); text-decoration: none; margin-right: 18px; }
+.project-title .jd-back:hover { text-decoration: underline; }
+.sat-alert { position: absolute; right: 18px; bottom: 18px; z-index: 4; width: min(320px, calc(100% - 36px)); padding: 12px 14px; border: 1px solid #ffb35c88; background: #07121bd9; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+.sat-alert b { font: 500 var(--text-lg) var(--font-body); color: var(--amber-hot); }
+.sat-alert span:not(.eyebrow) { font-size: var(--text-xs); color: var(--text); line-height: 1.45; }
+.sat-alert small { font: 10px var(--font-mono); color: var(--muted); letter-spacing: .5px; }
+#seq-viewport .hud-top #seq-step-sub { max-width: 60ch; }
+/* 04 ports */
+.ports-top { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: var(--space-5); align-items: start; }
+.ports-stage { border: 1px solid var(--line); min-width: 0; background: #050e14; }
+.ports-canvas { position: relative; }
+.ports-canvas canvas { display: block; width: 100%; height: auto; aspect-ratio: 1; image-rendering: auto; }
+.pt-legend { position: absolute; left: 0; right: 0; top: 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; padding: 8px 12px; font: 10px var(--font-mono); letter-spacing: .5px; color: var(--text); background: linear-gradient(#07121bcc, transparent); pointer-events: none; }
+.pt-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; border: 2px solid; margin: 0 4px 0 10px; vertical-align: -1px; }
+.pt-legend i.g { border-color: #5fbf7a; } .pt-legend i.o { border-color: #ffb35c; } .pt-legend i.r { border-color: #e0675a; }
+.ports-side { display: flex; flex-direction: column; gap: var(--space-4); }
+.ports-side .kpis { grid-template-columns: 1fr 1fr; }
+.pt-alerts { display: flex; flex-direction: column; gap: 8px; }
+.pt-alert { border: 1px solid var(--line); border-left: 3px solid var(--good); background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.pt-alert.mid { border-left-color: var(--warn); } .pt-alert.bad { border-left-color: var(--crit); }
+.pt-alert b { font-weight: 500; font-size: var(--text-sm); } .pt-alert span { font-size: var(--text-xs); color: var(--muted); line-height: 1.5; }
+#pt-sections { display: flex; flex-direction: column; gap: var(--space-5); margin-top: var(--space-5); }
+/* 05 prototype */
+.pr-image canvas { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; background: #04101a; border-bottom: 1px solid var(--line); }
+.pr-image .proto-step-nav span:last-child { color: var(--muted); }
+.flight-notes code { font: 11px var(--font-mono); color: var(--accent); }
+@media (max-width: 1100px) { .ports-top { grid-template-columns: 1fr; } .ports-side .kpis { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
